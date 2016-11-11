@@ -18,6 +18,7 @@ An Information Retrieval 2 project.
 
 ## Links:
 
+- [Very nice tutorial on IR and LM](http://benjaminbolte.com/blog/2016/keras-language-modeling.html#word-embeddings)
 - [Keras Seq2Seq](https://github.com/farizrahman4u/seq2seq)
 - [Keras Recurrentshop](https://github.com/datalogai/recurrentshop) (Containers and such)
 - [Keras Language Modeling](https://github.com/codekansas/keras-language-modeling)

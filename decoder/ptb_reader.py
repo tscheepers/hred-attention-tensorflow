@@ -49,6 +49,9 @@ def ptb_raw_data(data_path=None):
   train_path = path.join(data_path, "ptb.train.txt")
   valid_path = path.join(data_path, "ptb.valid.txt")
   test_path = path.join(data_path, "ptb.test.txt")
+  # train_path = path.join(data_path, "ptb.dev.txt")
+  # valid_path = path.join(data_path, "ptb.dev.txt")
+  # test_path = path.join(data_path, "ptb.dev.txt")
 
   word_to_id = _build_vocab(train_path)
   train_data = _file_to_word_ids(train_path, word_to_id)
