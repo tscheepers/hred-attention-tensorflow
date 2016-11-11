@@ -10,8 +10,10 @@ from timeit import default_timer as timer
 from nltk import word_tokenize
 from nltk.corpus import stopwords
 from datetime import datetime, timedelta
-from keras.preprocessing.text import Tokenizer
 import numpy as np
+from operator import itemgetter
+from utils.vocabulary import Vocabulary
+
 
 AOL_ROOT_PATH = 'AOL-user-ct-collection'
 AOL_TAR_FILE = 'aol-data.tar'
@@ -65,13 +67,21 @@ def get_files(root_dir):
 
 
 class Processor:
-    def __init__(self, path, num_of_recs=None, dict_file=None,
-                 make_dict=False, file_to_process=None, move_files=False):
+    def __init__(self, path, num_of_recs=None, make_dict=True, file_to_process=None, move_files=False,
+                 vocab_threshold=90000):
 
         self.file_input_path = path
         self.move_files = move_files
         self.query_vocab = []
-        self.vocab_tokenizer = Tokenizer()
+        # The VOCABULARY object
+        # IMPORTANT: we only keep 90K most frequent words of background vocabulary
+        #            another note:
+        #            I am quite sure that the upper threshold only works well if we fit all text
+        #            in one go, how can the tokenizer otherwise determine which words to keep
+        #            I mean, if it throws away the word "illness" in the beginning because frequency is too low
+        #            but when we "fit" new texts to the tokenizer the same word suddenly appears many times
+        #            in the text, but still not enough to reach the threshold
+        self.vocab_tokenizer = Vocabulary(max_prune_words=vocab_threshold)
         # The queries in this dataset were sampled between 1 March, 2006 and 31 May, 2006
         # (1) BACKGROUND set
         # those submitted before 1 May, 2006 as our background data to estimate the proposed model
@@ -90,10 +100,7 @@ class Processor:
 
         self.dictionary = None
         self.make_dict = make_dict
-        self.dict_file = dict_file
-        # IMPORTANT: we only keep 90K most frequent words of background vocabulary
-        # TODO: add "unkown" to dictionary
-        self.max_prune_words = 90000
+
         # get all the files we need to process
         # files list: contains user*.txt files that need to be processed
         # gz_files list: contains user*.txt.gz files that need to be processed
@@ -117,63 +124,70 @@ class Processor:
         #       - extract gz-files
         #       - take the first three columns of each row: AnonID, Query, QueryTime
         #       - remove non-alphanumeric characters and convert to lowercase
+        #       - remove words under a minimal length, currently using 2 letters as minimum
         #       - save to "user*.txt" file
         #       - move gz file to "processed" directory (because we query the data directory for gz-files)
 
         if not os.getcwd().find(path) == -1 and len(self.gz_files) != 0:
             print "INFO - need to process %d gz files" % len(self.gz_files)
             self.process_gz_files()
-            self.save_vocab()
+            self.vocab_tokenizer.save_vocab()
         else:
             raise Exception('Expected %s to exist in data directory.' % path)
 
-        # Pre processing step 2
-        # ========================
-        # make or extend the existing word-dictionary
 
-        if self.make_dict:
-            self.load_dict()
-            if len(self.query_vocab) != 0:
-                print "INFO - Make/extend dictionary"
-                self.make_dictionary()
-                self.save_dict()
-            else:
-                print("No more files to process for dictionary.")
 
         # Pre processing step 3
         # ==========================
         # - process the *.dat files, replace all query words with vocab indices
-        #   words that are not in the vocab will be replaced with default "unknown"
+        #   words that are not in the vocab will be replaced with default "0" = unknown
         # - because we have 4 types of files we process with options
         #       bg = background files bg*.dat
         #       tr = training
         #       val = validation
         #       test = test
 
-    def load_dict(self):
-        if os.path.isfile(self.dict_file):
-            self.dictionary = gensim.corpora.dictionary.Dictionary.load(self.dict_file)
-        else:
-            # make new dictionary, add word "unknown"
-            self.dictionary = gensim.corpora.dictionary.Dictionary()
+    @staticmethod
+    def tokenize_w_nltk(query):
+        return word_tokenize(query)
 
-        print("INFO - Loaded vocab dictionary: %d" % len(self.dictionary))
+    @staticmethod
+    def remove_short_words(query_words, min_length):
+        return [w for w in query_words if len(w) >= min_length]
 
-    def save_dict(self):
-        self.dictionary.save(self.dict_file)
-        print "INFO -- Saved word dictionary %s. Contains %d words" % (self.dict_file, len(self.dictionary))
+    @staticmethod
+    def remove_non_alphanumric(string):
+        return re.sub(r'\W', ' ', string.lower())
 
-    def make_dictionary(self):
-        """
-            Loop through the user*.txt files
-            extract query words (that were filtered earlier)
-            and add them to the word dictionary (gensim)
-        """
-        if len(self.query_vocab) != 0:
-            num_now = len(self.dictionary)
-            self.dictionary.add_documents(self.query_vocab, self.max_prune_words)
-            num_new = len(self.dictionary)
-            print("INFO - Added %d words to dictionary" % (num_new - num_now))
+    # currently not in use
+    def remove_stop_words(self, string):
+        words = string.split()
+        return ' '.join([w for w in words if w not in self.stop])
+
+    # def load_dict(self):
+    #     if os.path.isfile(self.dict_file):
+    #         self.dictionary = gensim.corpora.dictionary.Dictionary.load(self.dict_file)
+    #     else:
+    #         # make new dictionary, add word "unknown"
+    #         self.dictionary = gensim.corpora.dictionary.Dictionary()
+    #
+    #     print("INFO - Loaded vocab dictionary: %d" % len(self.dictionary))
+    #
+    # def save_dict(self):
+    #     self.dictionary.save(self.dict_file)
+    #     print "INFO -- Saved word dictionary %s. Contains %d words" % (self.dict_file, len(self.dictionary))
+    #
+    # def make_dictionary(self):
+    #     """
+    #         Loop through the user*.txt files
+    #         extract query words (that were filtered earlier)
+    #         and add them to the word dictionary (gensim)
+    #     """
+    #     if len(self.query_vocab) != 0:
+    #         num_now = len(self.dictionary)
+    #         self.dictionary.add_documents(self.query_vocab, self.max_prune_words)
+    #         num_new = len(self.dictionary)
+    #         print("INFO - Added %d words to dictionary" % (num_new - num_now))
 
     def process_gz_files(self):
 
@@ -181,6 +195,28 @@ class Processor:
             print "INFO - currently processing gz file: %s" % file
             self.process_one_gz_file(file)
             break
+        # IMPORTANT: we feed the tokenizer aka our vocabulary object after we processed ALL files
+        # otherwise tokenizer cannot determine which infrequent words to eliminate from the vocab
+        if self.make_dict:
+            self.vocab_tokenizer.fit_on_texts(self.query_vocab)
+
+    def chgcwd_to_data_dir(self):
+        """
+            Change the current working directory to data/AOL... directory
+        """
+        if os.getcwd().find('data') == -1:
+            os.chdir('../data')
+
+        if os.path.isdir(self.file_input_path):
+            os.chdir(self.file_input_path)
+
+    @staticmethod
+    def filter_dictionary(l_dict, prune_threshold=9e4):
+
+        prune_threshold = int(prune_threshold)
+        sorted_list = sorted(l_dict.items(), key=itemgetter(1), reverse=True)
+        sorted_list = sorted_list[:prune_threshold]
+        return dict(sorted_list), sorted_list
 
     def process_one_gz_file(self, filename, num_records=None):
 
@@ -217,6 +253,8 @@ class Processor:
                         tidy = self.remove_non_alphanumric(Query)
                         if tidy != '':
                             query_words = self.tokenize_w_nltk(tidy)
+                            query_words = self.remove_short_words(query_words, min_length=2)
+
                             if len(query_words) != 0:
                                 # decide whether to write background file or "rest" file
                                 if self.background_dt > query_dttm:
@@ -253,7 +291,6 @@ class Processor:
             # add this file to the list that we'll use to make/extend the dictionary
             # remember only using background data to construct vocabulary
             self.files.append(outfile_bg)
-            self.vocab_tokenizer.fit_on_texts(self.query_vocab)
 
             print("INFO - total queries %d, unusable after preprocessing %d" % (num_total, num_empty))
         # move file to processed directory
@@ -263,48 +300,9 @@ class Processor:
             os.rename(filename, "processed/" + filename)
             print("INFO -- moved file %s" % filename)
 
-    @staticmethod
-    def tokenize_w_nltk(query):
-        return word_tokenize(query)
-
-    @staticmethod
-    def remove_non_alphanumric(string):
-        return re.sub(r'\W', ' ', string.lower())
-
-    # currently not in use
-    def remove_stop_words(self, string):
-        words = string.split()
-        return ' '.join([w for w in words if w not in self.stop])
-
-    def save_vocab(self):
-
-        print("Save objects to files in directory %s" % self.file_input_path)
-        start = timer()
-        with open(self.dict_file, 'wb') as f:
-            pickle.dump(self.vocab_tokenizer, f)
-        end = timer()
-        print("Saved objects to file in %s seconds." % (end - start))
-
-    @staticmethod
-    def load_vocab(file_input_path):
-        if os.getcwd().find('data') == -1:
-            os.chdir('../data')
-
-        if os.path.isdir(file_input_path):
-            os.chdir(file_input_path)
-
-        print "Load objects from directory %s" % file_input_path
-
-        with open(file_input_path, 'rb') as f:
-            return pickle.load(f)
-
     def translate_words_to_indices(self, final_proc_options, final_out_dir="final_out"):
 
-        if os.getcwd().find('data') == -1:
-            os.chdir('../data')
-
-        if os.path.isdir(self.file_input_path):
-            os.chdir(self.file_input_path)
+        self.chgcwd_to_data_dir()
 
         if final_proc_options is not None:
             if not os.path.isdir(final_out_dir):
@@ -312,32 +310,56 @@ class Processor:
             file_ext = ".out"
             for opt in final_proc_options:
                 files_to_process = glob.glob(opt + "*.dat")
+                # TODO: accumulate all files of one processing sort (e.g. background queries) into one large output
+                # currently separating the output files for convenience
+                # file. we keep track of the number of queries that contain one or more unknow query words
+                # TODO: what are we going to do with these queries that contain unknown words?
                 for filename in files_to_process:
-                    print("filename %s" % filename)
+                    print("INFO - writing output to filename %s" % filename)
+                    query_c = 0
+                    query_uw_count = 0
                     with open(filename, 'r') as f:
                         outfile = final_out_dir + "/" + os.path.splitext(filename)[0] + file_ext
                         with open(outfile, 'w') as f_out:
                             for line in f:
-                                # TODO: unknown words need to have index e.g. 0  unknown
+                                query_c += 1
                                 sess_id, user_id, q_words, q_time = line.split('\t')
                                 # looks awkward, but, we first need to split the words into a list
                                 # this seems to be necessary for kera tokenizer i.e. the translation to indices
                                 q_w_list = q_words.split(",")
-                                # tranforming the result of tokenizer to numpy array, getting rid of 1 dimension
-                                q_w_seq = np.reshape(self.vocab_tokenizer.texts_to_sequences(q_w_list), (len(q_w_list)))
-                                # then we need again convert the numpy array to a string, separated by ","
-                                q_w_str = q_w_seq.astype('str')
-                                # not sure whether this works, converting empty array cells to zero = unknown word
-                                # we will have to deal with this situation because the vocab will be limited to 90K
-                                q_w_str[q_w_str == ''] = '0'
-                                q_w_str = ",".join(q_w_str)
-                                f_out.write('{}\t{}\t{}\n'.format(sess_id, user_id, q_w_str))
+                                # translate the query word sequence to indices with keras tokenizer
+                                # then replacing unknown entries with ['0']. keras uses for each word a list
+                                q_w_list = [[0] if wl == [] else wl for wl in
+                                             self.vocab_tokenizer.query_to_sequence(q_w_list)]
+                                # reshaping the result of tokenizer to numpy array, in order to get rid
+                                # of 1 list dimension
+                                q_w_seq = np.reshape(q_w_list, (len(q_w_list)))
+                                # count zero = unknown entries
+                                if q_w_seq[q_w_seq == 0].shape[0] > 0:
+                                    query_uw_count += 1
 
+                                # convert numpy array to string
+                                q_w_str = ",".join(q_w_seq.astype('str'))
+                                f_out.write('{}\t{}\t{}\n'.format(sess_id, user_id, q_w_str))
+                    # notice the statistics at the end of each file
+                    print("INFO - %d queries in output file, %d queries contain one or more unknown q-words"
+                          % (query_c, query_uw_count))
 if __name__ == '__main__':
-    p = Processor(AOL_ROOT_PATH, num_of_recs=None, make_dict=False, dict_file="aol_vocab.pck",
-                  file_to_process='user-ct-test-collection-09.txt.gz')
+    p = Processor(AOL_ROOT_PATH, num_of_recs=None,
+                 file_to_process='user-ct-test-collection-01.txt.gz', vocab_threshold=90000)
     # only translate bg = background *.dat files for the moment
     p.translate_words_to_indices(['bg'])
-    print("Number of words in vocabulary %d" % len(p.vocab_tokenizer.word_counts))
+    # print("Number of words in vocabulary %d" % len(p.vocab_tokenizer.word_counts))
 
-    # vocab = Processor.load_vocab("/home/jogi/git/repository/ir2_jorg/data/AOL-user-ct-collection/aol_vocab.pck")
+    # vocab = Vocabulary(file_input_path="/home/jogi/git/repository/ir2_jorg/data/AOL-user-ct-collection/" +
+    #                                   Vocabulary.dict_file)
+    # print(len(vocab.word_counts))
+    # print vocab.texts_to_sequences(['circilirsavings', 'com'])
+    # query_w = ['cheveron', 'glenside', 'road', 'richmond', 'virginia']
+    # w_seq = vocab.query_to_sequence(query_w)
+    # print("translated to ", w_seq)
+    # print(vocab.queryw_in_vocab(query_w))
+    # print(vocab.queryw_to_queryw(query_w))
+
+
+
