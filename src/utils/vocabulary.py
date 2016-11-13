@@ -5,6 +5,15 @@ from keras.preprocessing.text import Tokenizer
 from timeit import default_timer as timer
 
 
+def save_vocabulary(vocab):
+    print("Save vocabulary object to file in directory %s" % os.getcwd() + "/" + Vocabulary.dict_file)
+    start = timer()
+    with open(Vocabulary.dict_file, 'wb') as f:
+        pickle.dump(vocab, f)
+    end = timer()
+    print("INFO - Saved vocabulary to file in %s seconds." % (end - start))
+
+
 class Vocabulary(object):
     # fixed the name of the vocabulary, class variable
     dict_file = 'aol_vocab.pkl'
@@ -12,17 +21,35 @@ class Vocabulary(object):
     def __init__(self, max_prune_words=90000, file_input_path=None):
 
         self.file_input_path = file_input_path
+
         if file_input_path is None:
             self._vocab = Tokenizer(nb_words=max_prune_words)
+            self._index_w_dict = None
         else:
             self.load_vocab()
+            self.make_index_word_dict()
+
+    @property
+    def keras_tokenizer(self):
+        return self._vocab
+
+    @property
+    def index_word_dict(self):
+        return self._index_w_dict
 
     @property
     def word_counts(self):
         return self._vocab.word_counts
 
+    @property
+    def word_index(self):
+        return self._vocab.word_index
+
     def fit_on_texts(self, texts):
         self._vocab.fit_on_texts(texts)
+
+    def make_index_word_dict(self):
+        self._index_w_dict = {item: k for k, item in self._vocab.word_index.iteritems()}
 
     def save_vocab(self):
 
@@ -56,6 +83,9 @@ class Vocabulary(object):
         # reshaping the result of tokenizer to numpy array, in order to get rid
         # of 1 list dimension
         return np.reshape(q_w_list, (len(q_w_list)))
+
+    def seq_to_words(self, seq):
+        return [self._index_w_dict[s] for s in seq]
 
 
 
