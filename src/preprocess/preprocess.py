@@ -1,17 +1,21 @@
-import glob
-import gzip
+# import gensim
 import os
 import re
 import sys
 import tarfile
+import glob
+import gzip
+
 from datetime import datetime, timedelta
 from operator import itemgetter
 
-import numpy as np
 from nltk import word_tokenize
 from nltk.corpus import stopwords
 
+import numpy as np
 from utils.vocabulary import Vocabulary
+
+# TODO: need to skip a query if all query words are unknown
 
 AOL_ROOT_PATH = 'AOL-user-ct-collection'
 AOL_TAR_FILE = 'aol-data.tar'
@@ -66,8 +70,9 @@ def get_files(root_dir):
 
 class Processor:
     def __init__(self, path, num_of_recs=None, make_dict=True, file_to_process=None, move_files=False,
-                 vocab_threshold=90000):
+                 vocab_threshold=90000, vocab_path=None):
 
+        self.file_to_process = file_to_process
         self.file_input_path = path
         self.move_files = move_files
         self.query_vocab = []
@@ -79,7 +84,11 @@ class Processor:
         #            I mean, if it throws away the word "illness" in the beginning because frequency is too low
         #            but when we "fit" new texts to the tokenizer the same word suddenly appears many times
         #            in the text, but still not enough to reach the threshold
-        self.vocab_tokenizer = Vocabulary(max_prune_words=vocab_threshold)
+        if vocab_path is None:
+            self.vocab_tokenizer = Vocabulary(max_prune_words=vocab_threshold)
+        else:
+            self.vocab_tokenizer = Vocabulary(file_input_path=vocab_path + Vocabulary.dict_file)
+
         # The queries in this dataset were sampled between 1 March, 2006 and 31 May, 2006
         # (1) BACKGROUND set
         # those submitted before 1 May, 2006 as our background data to estimate the proposed model
@@ -105,18 +114,20 @@ class Processor:
         #
         self.files = []
         self.gz_files = []
-        print(file_to_process)
-        if file_to_process is not None:
+        self.num_of_recs = num_of_recs
+        self.stop = set(stopwords.words('english'))
+
+    def execute(self):
+
+        if self.file_to_process is not None:
             print("INFO -- ONE-FILE-PROCESSING option")
             if os.getcwd().find('data') == -1:
-                os.chdir('../data/' + path)
-            self.gz_files.append(file_to_process)
+                os.chdir('../data/' + self.file_input_path)
+            self.gz_files.append(self.file_to_process)
         else:
             self.gz_files = get_files(AOL_ROOT_PATH)
 
-        self.num_of_recs = num_of_recs
 
-        self.stop = set(stopwords.words('english'))
         # Pre processing step 1
         # ========================
         #       - extract gz-files
@@ -126,24 +137,12 @@ class Processor:
         #       - save to "user*.txt" file
         #       - move gz file to "processed" directory (because we query the data directory for gz-files)
 
-        if not os.getcwd().find(path) == -1 and len(self.gz_files) != 0:
+        if not os.getcwd().find(self.file_input_path) == -1 and len(self.gz_files) != 0:
             print "INFO - need to process %d gz files" % len(self.gz_files)
             self.process_gz_files()
             self.vocab_tokenizer.save_vocab()
         else:
-            raise Exception('Expected %s to exist in data directory.' % path)
-
-
-
-        # Pre processing step 3
-        # ==========================
-        # - process the *.dat files, replace all query words with vocab indices
-        #   words that are not in the vocab will be replaced with default "0" = unknown
-        # - because we have 4 types of files we process with options
-        #       bg = background files bg*.dat
-        #       tr = training
-        #       val = validation
-        #       test = test
+            raise Exception('Expected %s to exist in data directory.' % self.file_input_path)
 
     @staticmethod
     def tokenize_w_nltk(query):
@@ -192,11 +191,15 @@ class Processor:
         for file in self.gz_files:
             print "INFO - currently processing gz file: %s" % file
             self.process_one_gz_file(file)
-            break
+            if self.make_dict:
+                print "INFO - updating the vocabulary..."
+                self.vocab_tokenizer.fit_on_texts(self.query_vocab)
+                print "INFO - vocabulary contains now %d words" % len(self.vocab_tokenizer.word_counts)
+            # set vocabular list to zero, we process the next file
+            self.query_vocab = []
+
         # IMPORTANT: we feed the tokenizer aka our vocabulary object after we processed ALL files
         # otherwise tokenizer cannot determine which infrequent words to eliminate from the vocab
-        if self.make_dict:
-            self.vocab_tokenizer.fit_on_texts(self.query_vocab)
 
     def chgcwd_to_data_dir(self):
         """
@@ -208,16 +211,24 @@ class Processor:
         if os.path.isdir(self.file_input_path):
             os.chdir(self.file_input_path)
 
-    @staticmethod
-    def filter_dictionary(l_dict, prune_threshold=9e4):
-
-        prune_threshold = int(prune_threshold)
-        sorted_list = sorted(l_dict.items(), key=itemgetter(1), reverse=True)
-        sorted_list = sorted_list[:prune_threshold]
-        return dict(sorted_list), sorted_list
+    # @staticmethod
+    # def filter_dictionary(l_dict, prune_threshold=9e4):
+    #
+    #     prune_threshold = int(prune_threshold)
+    #     sorted_list = sorted(l_dict.items(), key=itemgetter(1), reverse=True)
+    #     sorted_list = sorted_list[:prune_threshold]
+    #     return dict(sorted_list), sorted_list
 
     def process_one_gz_file(self, filename, num_records=None):
-
+        # Pre processing step 3
+        # ==========================
+        # - process the *.dat files, replace all query words with vocab indices
+        #   words that are not in the vocab will be replaced with default "0" = unknown
+        # - because we have 4 types of files we process with options
+        #       bg = background files bg*.dat
+        #       tr = training
+        #       val = validation
+        #       test = test
         timeout = timedelta(minutes=30)
         file_ext = ".dat"
 
@@ -261,13 +272,13 @@ class Processor:
                                     bg.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, ",".join(query_words),
                                                                        QueryTime))
                                 elif self.training_dt > query_dttm:
-                                    tr.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, " ".join(query_words),
+                                    tr.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, ",".join(query_words),
                                                                        QueryTime))
                                 elif self.validation_dt > query_dttm:
-                                    val.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, " ".join(query_words),
+                                    val.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, ",".join(query_words),
                                                                        QueryTime))
                                 else:
-                                    test.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, " ".join(query_words),
+                                    test.write('{}\t{}\t{}\t{}\n'.format(session_id, AnonID, ",".join(query_words),
                                                                        QueryTime))
                             else:
                                 # after preprocessing nothing left of query, register that
@@ -281,7 +292,7 @@ class Processor:
                         break
                     # save current user ID in order to determine the session ID
                     num_total += 1
-                    if num_total % 10000 == 0:
+                    if num_total % 100000 == 0:
                         print("INFO -- Progress %d" % num_total)
                     prev_ID = AnonID
                     last_query_activity_dttm = query_dttm
@@ -324,7 +335,12 @@ class Processor:
                                 sess_id, user_id, q_words, q_time = line.split('\t')
                                 # looks awkward, but, we first need to split the words into a list
                                 # this seems to be necessary for kera tokenizer i.e. the translation to indices
-                                q_w_list = q_words.split(",")
+                                # Note: bug in the beginning, the val, test files still contains spaces instead of
+                                # commas, therefor I replace all spaces here
+                                if " " in q_words:
+                                    q_w_list = q_words.split(" ")
+                                else:
+                                    q_w_list = q_words.split(",")
                                 # translate the query word sequence to indices with keras tokenizer
                                 # then replacing unknown entries with ['0']. keras uses for each word a list
                                 q_w_list = [[0] if wl == [] else wl for wl in
@@ -335,6 +351,9 @@ class Processor:
                                 # count zero = unknown entries
                                 if q_w_seq[q_w_seq == 0].shape[0] > 0:
                                     query_uw_count += 1
+                                    # TODO: need to skip a query if all query words are unknown
+                                    # if q_w_seq[q_w_seq == 0].shape[0] == len(q_w_list):
+                                    # if all query words don't exist in dictionary, skip query
 
                                 # convert numpy array to string
                                 q_w_str = ",".join(q_w_seq.astype('str'))
@@ -343,15 +362,19 @@ class Processor:
                     print("INFO - %d queries in output file, %d queries contain one or more unknown q-words"
                           % (query_c, query_uw_count))
 if __name__ == '__main__':
-    p = Processor(AOL_ROOT_PATH, num_of_recs=None,
-                 file_to_process='user-ct-test-collection-01.txt.gz', vocab_threshold=90000)
+    root_path = "/home/jogi/git/repository/ir2_jorg/data/AOL-user-ct-collection/"
+    # p = Processor(AOL_ROOT_PATH, num_of_recs=None, vocab_path=root_path,
+    #              file_to_process='user-ct-test-collection-02.txt.gz', vocab_threshold=90000)
+    # p = Processor(AOL_ROOT_PATH, num_of_recs=None, vocab_threshold=90000)
+    # p.execute()
     # only translate bg = background *.dat files for the moment
-    p.translate_words_to_indices(['bg'])
+    # p.translate_words_to_indices(['bg'])
     # print("Number of words in vocabulary %d" % len(p.vocab_tokenizer.word_counts))
 
     # vocab = Vocabulary(file_input_path="/home/jogi/git/repository/ir2_jorg/data/AOL-user-ct-collection/" +
-    #                                   Vocabulary.dict_file)
-    # print(len(vocab.word_counts))
+    #                                  Vocabulary.dict_file)
+    p = Processor(AOL_ROOT_PATH, vocab_path=root_path)
+    p.translate_words_to_indices(['tr'])
     # print vocab.texts_to_sequences(['circilirsavings', 'com'])
     # query_w = ['cheveron', 'glenside', 'road', 'richmond', 'virginia']
     # w_seq = vocab.query_to_sequence(query_w)

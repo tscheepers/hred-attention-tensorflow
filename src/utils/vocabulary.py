@@ -15,7 +15,7 @@ class Vocabulary(object):
         if file_input_path is None:
             self._vocab = Tokenizer(nb_words=max_prune_words)
         else:
-            self._vocab = self.load_vocab()
+            self.load_vocab()
 
     @property
     def word_counts(self):
@@ -35,10 +35,10 @@ class Vocabulary(object):
 
     def load_vocab(self):
 
-        print "INFO - Load vocab from directory %s" % self.file_input_path
-
         with open(self.file_input_path, 'rb') as f:
-            return pickle.load(f)
+            self._vocab = pickle.load(f)
+        print "INFO - Load vocab from directory %s contains %d words" % (self.file_input_path,
+                len(self._vocab.word_counts))
 
     def queryw_in_vocab(self, query_w):
         """
