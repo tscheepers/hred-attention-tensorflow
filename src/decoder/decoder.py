@@ -74,7 +74,7 @@ class Decoder:
         model.add(Activation('softmax'))
 
         def one_hot_categorical_crossentropy(y_true, y_pred):
-            y_true1 = tf.one_hot(K.flatten(K.cast(y_true, 'int32')), len(self.vocab), axis=1)
+            y_true1 = tf.one_hot(K.flatten(K.cast(y_true, 'int32')), vocabsize, axis=1)
             return K.categorical_crossentropy(y_true1, y_pred)
 
         model.compile(loss=one_hot_categorical_crossentropy, optimizer='rmsprop')
