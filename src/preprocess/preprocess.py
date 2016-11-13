@@ -1,19 +1,17 @@
-import re
-import gensim
-import os
-import sys
-import tarfile
 import glob
 import gzip
-import pickle
-from timeit import default_timer as timer
+import os
+import re
+import sys
+import tarfile
+from datetime import datetime, timedelta
+from operator import itemgetter
+
+import numpy as np
 from nltk import word_tokenize
 from nltk.corpus import stopwords
-from datetime import datetime, timedelta
-import numpy as np
-from operator import itemgetter
-from utils.vocabulary import Vocabulary
 
+from utils.vocabulary import Vocabulary
 
 AOL_ROOT_PATH = 'AOL-user-ct-collection'
 AOL_TAR_FILE = 'aol-data.tar'

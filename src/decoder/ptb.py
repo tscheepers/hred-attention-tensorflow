@@ -33,7 +33,8 @@ def _file_to_word_ids(filename, word_to_id):
 
 
 def ptb_raw_data(data_path=None):
-  """Load PTB raw data from data directory "data_path".
+  """
+  Load PTB raw data from data directory "data_path".
   Reads PTB text files, converts strings to integer ids,
   and performs mini-batching of the inputs.
   The PTB dataset comes from Tomas Mikolov's webpage:
@@ -57,5 +58,5 @@ def ptb_raw_data(data_path=None):
   train_data = _file_to_word_ids(train_path, word_to_id)
   valid_data = _file_to_word_ids(valid_path, word_to_id)
   test_data = _file_to_word_ids(test_path, word_to_id)
-  vocabulary = len(word_to_id)
-  return train_data, valid_data, test_data, vocabulary
+
+  return train_data, valid_data, test_data, word_to_id
