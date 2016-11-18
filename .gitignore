@@ -5,3 +5,4 @@ data/AOL-user-ct-collection
 data/aol-data.tar
 *.pyc
 src/preprocess/features-ranking/data/
+data/
