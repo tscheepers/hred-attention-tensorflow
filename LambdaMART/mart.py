@@ -11,6 +11,9 @@ from itertools import chain
 import time
 
 class Ensemble:
+    """ 
+        Class for the Ensemble model of the Boosting Trees
+    """
     def __init__(self, rate):
         self.trees = []
         self.rate = rate
@@ -25,11 +28,13 @@ class Ensemble:
         return self.eval([object])[0]
 
     def eval(self, objects):
+        # for an object, let all the tree's make a decision 
+        # rate is the learning rate
         results = np.zeros(len(objects))
         for tree in self.trees:
             results += tree.predict(objects) * self.rate
         return results
-
+    # remove the last x = number trees from the array
     def remove(self, number):
         self.trees = self.trees[:-number]
 
@@ -55,7 +60,7 @@ def dcg(scores):
     return sum(map(point_dcg, enumerate(scores)))
 
 
-def ndcg(page, k=10):
+def ndcg(page, k=20):
     model_top = page[:k]
 
     true_top = np.array([])
@@ -144,8 +149,10 @@ def mart_responces(prediction, true_score):
     return true_score - prediction
 
 
-def learn(train_file, n_trees=10, learning_rate=0.1, k=10, validate=False):
+def learn(train_file, n_trees=500, learning_rate=0.002, k=20, validate=True):
     print "Loading train file"
+
+    # load training file where needed 
     train = np.loadtxt(train_file, delimiter=",", skiprows=1)
 
     scores = train[:, 0]
@@ -260,7 +267,7 @@ if __name__ == "__main__":
 
     model = learn(options.train_file,
                   validate = options.validate,
-                  n_trees = 200)
+                  n_trees = 500)
 
     if options.predict_file:
         predict(model, options.predict_file)
