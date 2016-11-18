@@ -5,6 +5,7 @@ import cPickle
 import operator
 from Common import psteff
 
+
 def suggest(ctx_files, model_file, to_file=1):
     pstree = psteff.PSTInfer()
     pstree.load(model_file)
@@ -15,6 +16,7 @@ def suggest(ctx_files, model_file, to_file=1):
         for line in open(ctxf):
             suffix = line.strip().split('\t')
             suggestions = pstree.suggest(suffix)
-            print >> output_file, '\t'.join(suggestions['suggestions'])
+            # print >> output_file, '\t'.join(suggestions['suggestions'])
+            output_file.write('\t'.join(suggestions['suggestions']) + "\n")
         f.close()
         output_file.close()
