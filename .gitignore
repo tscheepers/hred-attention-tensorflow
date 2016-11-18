@@ -3,3 +3,4 @@
 .DS_Store
 data/AOL-user-ct-collection
 data/aol-data.tar
+*.pyc
