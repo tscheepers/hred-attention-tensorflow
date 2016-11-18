@@ -1,19 +1,16 @@
+import re
 # import gensim
 import os
-import re
 import sys
 import tarfile
 import glob
 import gzip
-
-from datetime import datetime, timedelta
-from operator import itemgetter
-
 from nltk import word_tokenize
 from nltk.corpus import stopwords
-
+from datetime import datetime, timedelta
 import numpy as np
 from utils.vocabulary import Vocabulary
+
 
 # TODO: need to skip a query if all query words are unknown
 
@@ -371,10 +368,11 @@ if __name__ == '__main__':
     # p.translate_words_to_indices(['bg'])
     # print("Number of words in vocabulary %d" % len(p.vocab_tokenizer.word_counts))
 
-    # vocab = Vocabulary(file_input_path="/home/jogi/git/repository/ir2_jorg/data/AOL-user-ct-collection/" +
-    #                                  Vocabulary.dict_file)
-    p = Processor(AOL_ROOT_PATH, vocab_path=root_path)
-    p.translate_words_to_indices(['tr'])
+    vocab = Vocabulary(file_input_path="/home/jogi/git/repository/ir2_jorg/data/AOL-user-ct-collection/" +
+                                      Vocabulary.dict_file)
+    vocab.save_vocab()
+    # p = Processor(AOL_ROOT_PATH, vocab_path=root_path)
+    # p.translate_words_to_indices(['tr'])
     # print vocab.texts_to_sequences(['circilirsavings', 'com'])
     # query_w = ['cheveron', 'glenside', 'road', 'richmond', 'virginia']
     # w_seq = vocab.query_to_sequence(query_w)
