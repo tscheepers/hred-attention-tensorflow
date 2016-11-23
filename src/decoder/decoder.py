@@ -20,7 +20,7 @@ class Decoder:
     def __init__(self):
 
         # The unfolding window for the RNN (during backprop)
-        self.window = 10
+        self.window = 32
 
     def load_data(self, ptb_path=None):
         """
@@ -112,7 +112,7 @@ class Decoder:
         unk = self.vocab_reversed[1]
 
         Y = self.model.predict(X)
-        argmax = np.argmax(Y)
+        argmax = np.argmax(Y) - 1
         word = self.vocab_reversed[argmax]
         return word
 
@@ -126,8 +126,8 @@ if __name__ == '__main__':
 
     decoder.load_data(ptb_path)
     decoder.build_model()
-    # decoder.load_weights(checkpoint_path)
-    decoder.train(checkpoint_path)
+    decoder.load_weights(checkpoint_path)
+    # decoder.train(checkpoint_path)
 
     result = decoder.predict('hey how are you doing this time of')
     print(result)
