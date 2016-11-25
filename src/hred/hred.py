@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib.layers.python.layers import initializers
 
 import layers
+import read_data
 
 
 class HRED():

@@ -12,10 +12,12 @@ VALIDATION_TFR = '../../data/tfrecords/valid.tfrecords'
 TEST_TFR = '../../data/tfrecords/test.tfrecords'
 SMALL_TFR = '../../data/tfrecords/small.tfrecords'
 
-BATCH_SIZE = 200
+#BATCH_SIZE = 200
 
 
 def _bytes_feature(value):
+    #print tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    #return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
@@ -38,6 +40,8 @@ def convert_to_tfr(data_file, name):
                     }
                 )
             )
+
+            #print example
             serialized = example.SerializeToString()
             writer.write(serialized)
     writer.close()
@@ -51,14 +55,25 @@ def read_and_decode(records_file):
     features = tf.parse_single_example(
         serialized_example,
         features={
-            'label': tf.FixedLenFeature([], tf.int64),
-            'input': tf.FixedLenFeature([], tf.int64)
+            'label': tf.FixedLenFeature([], tf.string),
+            'input': tf.FixedLenFeature([], tf.string)
         })
 
-    label = features['label']
-    input = features['input']
+    # label = tf.decode_raw(features['label'], tf.uint8)
+    # #label.set_shape()
+    # input = tf.decode_raw(features['input'], tf.uint8)
+
+    label = tf.cast(features['label'], tf.int32)
+    input = tf.cast(features['input'], tf.int32)
+
+    #print label, input
+
+    #
+    # label = features['label']
+    # input = features['input']
 
     return label, input
+
 
 def convert_multiple_files(files, names):
     for i in range(len(files)):
@@ -68,18 +83,33 @@ def convert_multiple_files(files, names):
 #convert_multiple_files([TEST_FILE], ['test'])
 
 
-#convert_to_tfr(SMALL_FILE, 'small')
+convert_to_tfr(SMALL_FILE, 'small')
 
-label, input = read_and_decode(TEST_TFR)
-input_batch, labels_batch = tf.train.shuffle_batch(
-    [input, label], batch_size=BATCH_SIZE,
-    capacity=2000,
-    min_after_dequeue=1000)
-
-print input_batch, labels_batch
-
-
-# label, input = read_and_decode('../../data/tfrecords/small.tfrecords')
-# print label, input
+# for serialized_example in tf.python_io.tf_record_iterator(SMALL_TFR):
+#
+#     print tf.train.Example().ParseFromString((serialized_example))
+#
+#     # example = tf.train.Example()
+#     # example.ParseFromString(serialized_example)
+#     #
+#     # input = type(example.features.feature['input'].int64_list)#.value
+#     # label = example.features.feature['label'].int64_list#.value
+#     #
+#     # print input, label
+#
+#
+# label, input = read_and_decode(SMALL_TFR)
+# print tf.train.Example().ParseFromString(label)
+# #print label, input
+# # input_batch, labels_batch = tf.train.shuffle_batch(
+# #     [input, label], batch_size=BATCH_SIZE,
+# #     capacity=2000,
+# #     min_after_dequeue=1000)
+# #
+# # print input_batch, labels_batch
+#
+#
+# # label, input = read_and_decode('../../data/tfrecords/small.tfrecords')
+# # print label, input
 
 
