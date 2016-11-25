@@ -1,11 +1,14 @@
 import tensorflow as tf
 import os
+import numpy as np
 
 TRAIN_FILE = '../../data/tr_session.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_test_session.out'
-eos = '2'
+eos = 2 #'2'
+max_len = 12
+pad = 3
 
 TRAIN_TFR = '../../data/tfrecords/train.tfrecords'
 VALIDATION_TFR = '../../data/tfrecords/valid.tfrecords'
@@ -83,7 +86,7 @@ def convert_multiple_files(files, names):
 #convert_multiple_files([TEST_FILE], ['test'])
 
 
-convert_to_tfr(SMALL_FILE, 'small')
+#convert_to_tfr(SMALL_FILE, 'small')
 
 # for serialized_example in tf.python_io.tf_record_iterator(SMALL_TFR):
 #
@@ -112,4 +115,25 @@ convert_to_tfr(SMALL_FILE, 'small')
 # # label, input = read_and_decode('../../data/tfrecords/small.tfrecords')
 # # print label, input
 
+def read_data(data_file):
 
+    with open(data_file, 'r') as df:
+        input_data = []
+        labels = []
+        for line in df:
+            input = [int(x) for x in line.strip().replace('\t', ' 1 ').split()] #[map(int, x.split()) for x in line.strip().split('\t')]
+            label = input[1:] + [eos]
+
+            if len(input) > max_len:
+                continue
+            else:
+                padding = [pad for i in range(max_len - len(input))]
+                input += padding
+                label += padding
+
+            print input
+            print label
+
+    return np.array(input_data), np.array(labels)
+
+read_data(SMALL_FILE)
