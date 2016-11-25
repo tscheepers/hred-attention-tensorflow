@@ -3,6 +3,7 @@ import tensorflow as tf
 
 
 def orthogonal_initializer(scale=1.1):
+    return tf.truncated_normal_initializer()
     '''
     From Lasagne and Keras. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
     '''
