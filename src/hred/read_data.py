@@ -123,7 +123,7 @@ def read_data(data_file):
         for line in df:
             input = [int(x) for x in line.strip().replace('\t', ' 1 ').split()] #[map(int, x.split()) for x in line.strip().split('\t')]
             label = input[1:] + [eos]
-
+1
             if len(input) > max_len:
                 continue
             else:
