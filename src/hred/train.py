@@ -1,3 +1,6 @@
+""" File to build and train the entire computation graph in tensorflow
+"""
+
 import numpy as np
 
 from hred import HRED

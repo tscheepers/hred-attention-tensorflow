@@ -6,7 +6,7 @@ import utils
 
 def embedding_layer(x, name='embedding-layer', vocab_dim=90004, embedding_dim=256):
     """
-    Used before the query encoder, to go from the one-hot vocabulary to an embedding
+    Used before the query encoder, to go from the vocabulary to an embedding
     """
 
     with tf.variable_scope(name):
@@ -19,17 +19,21 @@ def embedding_layer(x, name='embedding-layer', vocab_dim=90004, embedding_dim=25
 
 def gru_layer_with_reset(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
     """
-    Used for the query encoder layer
-    :param x should be a 2-tuple
+    Used for the query encoder layer. The encoder is reset after an EoQ symbol
+    has been reached.
+
+    :param h_prev: previous state of the GRU layer
+    :param x_packed: x_packed should be a 2-tuple: (embedding, reset vector = x-mask)
+    :return: updated hidden layer and reset hidden layer
     """
 
-    # Unpack mandatory packed force_reset_vector
+    # Unpack mandatory packed force_reset_vector, x = embedding
     x, reset_vector = x_packed
 
     with tf.variable_scope(name):
         h = _gru_layer(h_prev, x, 'gru', x_dim, y_dim)
 
-        # Force reset hidden state
+        # Force reset hidden state: is set to zero if reset vector consists of zeros
         h_reset = reset_vector * h
 
     return tf.pack([h, h_reset])
@@ -37,8 +41,10 @@ def gru_layer_with_reset(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
 
 def gru_layer_with_retain(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
     """
-    Used for the session encoder layer
-    :param x_packed should be a 2-tuple
+    Used for the session encoder layer. The current state of the session encoder
+    should be retained if no EoQ symbol has been reached yet.
+    :param h_prev: previous state of the GRU layer
+    :param x_packed: x_packed should be a 2-tuple (embedding, retain vector = x-mask)
     """
 
     # Unpack mandatory packed retain_vector
@@ -47,7 +53,8 @@ def gru_layer_with_retain(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
     with tf.variable_scope(name):
         h = _gru_layer(h_prev, x, 'gru', x_dim, y_dim)
 
-        # Force reset hidden state
+        # Force reset hidden state: is h_prev is retain vector consists of ones,
+        # is h if retain vector consists of zeros
         h_retain = retain_vector * h_prev + (1 - retain_vector) * h
 
     return tf.pack([h, h_retain])
@@ -56,10 +63,12 @@ def gru_layer_with_retain(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
 def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=512, y_dim=1024):
     """
     Used for the decoder layer
-    :param x_packed should be a 3-tuple
+    :param h_prev: previous decoder state
+    :param x_packed: should be a 3-tuple (embedder, mask, session_encoder)
     """
 
     # Unpack mandatory packed retain_vector and the state
+    # x = embedder, ratain_vector = mask, state = session_encoder
     x, retain_vector, state = x_packed
 
     with tf.variable_scope(name):
@@ -97,6 +106,13 @@ def output_layer(x_packed, name='output', x_dim=256, y_dim=512, h_dim=512, s_dim
 
 
 def logits_layer(x, name='logits', x_dim=512, y_dim=90004):
+    """
+    Used to compute the logits after the output layer.
+    The logits could be fed to a softmax layer
+
+    :param x: output (obtained in layers.output_layer)
+    :return: logits
+    """
 
     with tf.variable_scope(name):
 
@@ -117,7 +133,6 @@ def _gru_layer(h_prev, x, name='gru', x_dim=256, y_dim=512):
 
         # Reset gate
         with tf.variable_scope('reset_gate'):
-
             Wi_r = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.001))
             Wh_r = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=utils.orthogonal_initializer())
             b_r = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
@@ -145,7 +160,8 @@ def _gru_layer(h_prev, x, name='gru', x_dim=256, y_dim=512):
 
 def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h_dim=512):
     """
-    Used for decoder
+    Used for decoder. In this GRU the state of the session encoder layer is used when
+    computing the decoder updates.
     """
 
     with tf.variable_scope(name):
