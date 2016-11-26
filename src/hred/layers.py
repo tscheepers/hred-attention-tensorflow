@@ -17,14 +17,14 @@ def embedding_layer(x, name='embedding-layer', vocab_dim=90004, embedding_dim=25
     return embedding
 
 
-def gru_layer_with_reset(h_prev, x, name='gru', x_dim=256, y_dim=512):
+def gru_layer_with_reset(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
     """
     Used for the query encoder layer
     :param x should be a 2-tuple
     """
 
     # Unpack mandatory packed force_reset_vector
-    x, reset_vector = x
+    x, reset_vector = x_packed
 
     with tf.variable_scope(name):
         h = _gru_layer(h_prev, x, 'gru', x_dim, y_dim)
@@ -35,14 +35,14 @@ def gru_layer_with_reset(h_prev, x, name='gru', x_dim=256, y_dim=512):
     return tf.pack([h, h_reset])
 
 
-def gru_layer_with_retain(h_prev, x, name='gru', x_dim=256, y_dim=512):
+def gru_layer_with_retain(h_prev, x_packed, name='gru', x_dim=256, y_dim=512):
     """
     Used for the session encoder layer
-    :param x should be a 2-tuple
+    :param x_packed should be a 2-tuple
     """
 
     # Unpack mandatory packed retain_vector
-    x, retain_vector = x
+    x, retain_vector = x_packed
 
     with tf.variable_scope(name):
         h = _gru_layer(h_prev, x, 'gru', x_dim, y_dim)
@@ -53,14 +53,14 @@ def gru_layer_with_retain(h_prev, x, name='gru', x_dim=256, y_dim=512):
     return tf.pack([h, h_retain])
 
 
-def gru_layer_with_state_reset(h_prev, x, name='gru', x_dim=256, h_dim=512, y_dim=1024):
+def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=512, y_dim=1024):
     """
     Used for the decoder layer
-    :param x should be a 3-tuple
+    :param x_packed should be a 3-tuple
     """
 
     # Unpack mandatory packed retain_vector and the state
-    x, retain_vector, state = x
+    x, retain_vector, state = x_packed
 
     with tf.variable_scope(name):
 
@@ -75,10 +75,12 @@ def gru_layer_with_state_reset(h_prev, x, name='gru', x_dim=256, h_dim=512, y_di
     return h
 
 
-def output_layer(h, x, state, name='output', x_dim=256, y_dim=512, h_dim=512, s_dim=512):
+def output_layer(x_packed, name='output', x_dim=256, y_dim=512, h_dim=512, s_dim=512):
     """
     Used after the decoder
     """
+
+    h, x, state, = x_packed
 
     with tf.variable_scope(name):
         Wh = tf.get_variable(name='weight_hidden', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.001))
@@ -94,14 +96,14 @@ def output_layer(h, x, state, name='output', x_dim=256, y_dim=512, h_dim=512, s_
     return y
 
 
-def softmax_layer(x, name='softmax', x_dim=512, y_dim=90004):
+def logits_layer(x, name='logits', x_dim=512, y_dim=90004):
 
     with tf.variable_scope(name):
 
         W = tf.get_variable(name='weight', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.001))
         b = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.random_normal_initializer(stddev=0.001))
 
-        y = tf.nn.softmax(tf.matmul(x, W) + b)
+        y = tf.matmul(x, W) + b
 
     return y
 

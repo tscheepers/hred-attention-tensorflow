@@ -14,9 +14,10 @@ class HRED():
         self.query_hidden_size = 4
         self.session_hidden_size = 5
         self.decoder_hidden_size = self.query_hidden_size
+        self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 0  # End of Query symbol
 
-    def step(self, X, start_hidden_query, start_hidden_session, start_hidden_decoder, start_output):
+    def step(self, X, start_hidden_query, start_hidden_session, start_hidden_decoder, start_output, start_logits):
 
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size)
 
@@ -64,29 +65,38 @@ class HRED():
             initializer=start_hidden_decoder
         )
 
-        def output_func(_, x_packed):
-            decoder, embedder, session_encoder = x_packed
-
-            output = layers.output_layer(
-                decoder,
-                embedder,
-                session_encoder,
+        output = tf.scan(
+            lambda _, x: layers.output_layer(
+                x,
                 x_dim=self.embedding_size,
                 h_dim=self.decoder_hidden_size,
-                y_dim=self.decoder_hidden_size,
-                s_dim=self.session_hidden_size
-            )
-
-            return layers.softmax_layer(
-                output,
-                x_dim=self.decoder_hidden_size,
-                y_dim=self.vocab_size
-            )
-
-        output = tf.scan(
-            output_func,
+                s_dim=self.session_hidden_size,
+                y_dim=self.output_hidden_size
+            ),
             (decoder, embedder, session_encoder),
             initializer=start_output
         )
 
-        return output
+        logits = tf.scan(
+            lambda _, x: layers.logits_layer(
+                x,
+                x_dim=self.output_hidden_size,
+                y_dim=self.vocab_size
+            ),
+            output,
+            initializer=start_logits
+        )
+
+        return logits
+
+    def softmax(self, logits):
+
+        return tf.nn.softmax(logits)
+
+    def loss(self, logits, labels):
+
+        labels = tf.one_hot(labels, self.vocab_size)
+
+        return tf.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(logits, labels)
+        )
