@@ -6,6 +6,7 @@ TRAIN_FILE = '../../data/tr_session.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_test_session.out'
+#eos = ' 2 '
 eos = 2 #'2'
 max_len = 12
 pad = 3
@@ -33,7 +34,7 @@ def convert_to_tfr(data_file, name):
 
     with open(data_file) as df:
         for line in df:
-            input = line.strip().replace('\t', ' 1 ').replace(' ', '')
+            input = line.strip().replace('\t', ' 1 ')#.replace(' ', '')
             label = input[1:] + eos
             example = tf.train.Example(
                 features=tf.train.Features(
@@ -44,7 +45,7 @@ def convert_to_tfr(data_file, name):
                 )
             )
 
-            #print example
+            print example
             serialized = example.SerializeToString()
             writer.write(serialized)
     writer.close()
@@ -58,35 +59,75 @@ def read_and_decode(records_file):
     features = tf.parse_single_example(
         serialized_example,
         features={
-            'label': tf.FixedLenFeature([], tf.string),
-            'input': tf.FixedLenFeature([], tf.string)
+            'label': tf.VarLenFeature(tf.string),
+            'input': tf.VarLenFeature(tf.string)
         })
 
-    # label = tf.decode_raw(features['label'], tf.uint8)
-    # #label.set_shape()
-    # input = tf.decode_raw(features['input'], tf.uint8)
+    # print features['label']
+    # print features['input']
+    # print "----" * 30
 
+    #label = tf.decode_raw(features['label'], tf.uint8)
+    # # #label.set_shape()
+    #input = tf.decode_raw(features['input'], tf.uint8)
+    #
     label = tf.cast(features['label'], tf.int32)
     input = tf.cast(features['input'], tf.int32)
-
-    #print label, input
-
     #
-    # label = features['label']
-    # input = features['input']
+    # print label
+    # print input
+    # print "----" * 30
 
-    return label, input
+    return input, label
+
+    # input_batch, labels_batch = tf.train.shuffle_batch(
+    #     [input, label], batch_size=1,
+    #     capacity=2000,
+    #     min_after_dequeue=1000)
+    #
+    # print labels_batch
+    # print input_batch
+    # print "----" * 30
+
+
+    #return label, input
 
 
 def convert_multiple_files(files, names):
     for i in range(len(files)):
         convert_to_tfr(files[i], names[i])
 
+
+def read_data(data_file):
+
+    with open(data_file, 'r') as df:
+        for line in df:
+            input = [int(x) for x in line.strip().replace('\t', ' 1 ').split()] #[map(int, x.split()) for x in line.strip().split('\t')]
+            label = input[1:] + [eos]
+
+            if len(input) > max_len:
+                continue
+            else:
+                padding = [pad for i in range(max_len - len(input))]
+                input += padding
+                label += padding
+
+            yield input, label
+
+#convert_to_tfr(SMALL_FILE, 'small')
+#read_and_decode(SMALL_TFR)
+
+
+
+
+
+
+
+
 #convert_multiple_files([TRAIN_FILE, VALIDATION_FILE, TEST_FILE], ['train', 'valid', 'test'])
 #convert_multiple_files([TEST_FILE], ['test'])
 
 
-#convert_to_tfr(SMALL_FILE, 'small')
 
 # for serialized_example in tf.python_io.tf_record_iterator(SMALL_TFR):
 #
@@ -115,25 +156,9 @@ def convert_multiple_files(files, names):
 # # label, input = read_and_decode('../../data/tfrecords/small.tfrecords')
 # # print label, input
 
-def read_data(data_file):
 
-    with open(data_file, 'r') as df:
-        input_data = []
-        labels = []
-        for line in df:
-            input = [int(x) for x in line.strip().replace('\t', ' 1 ').split()] #[map(int, x.split()) for x in line.strip().split('\t')]
-            label = input[1:] + [eos]
 
-            if len(input) > max_len:
-                continue
-            else:
-                padding = [pad for i in range(max_len - len(input))]
-                input += padding
-                label += padding
 
-            print input
-            print label
-
-    return np.array(input_data), np.array(labels)
-
-read_data(SMALL_FILE)
+# for (i,l) in read_data(SMALL_FILE):
+#     print "printing: ", i
+#     print "printing: ", l

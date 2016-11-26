@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 class Optimizer(object):
 
     def __init__(self, loss, initial_learning_rate, num_steps_per_decay,
