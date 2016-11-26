@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib.layers.python.layers import initializers
 
 import layers
+import read_data
 
 
 class HRED():
@@ -100,3 +101,4 @@ class HRED():
         return tf.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
         )
+
