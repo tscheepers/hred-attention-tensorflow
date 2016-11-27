@@ -51,7 +51,7 @@ class HRED():
         return feed_dict
 
     def step_through_session(self, X, start_hidden_query=None, start_hidden_session=None, start_hidden_decoder=None,
-                      start_output=None, start_logits=None, return_hidden_states=True, return_softmax=True):
+                      start_output=None, start_logits=None, return_last_with_hidden_states=False, return_softmax=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
@@ -166,9 +166,9 @@ class HRED():
             output = logits
 
         # If we want to continue decoding with single_step we need the hidden states of all GRU layers
-        if return_hidden_states:
+        if return_last_with_hidden_states:
             hidden_decoder = decoder  # there is no resetted decoder output
-            return output, hidden_query, hidden_session, hidden_decoder
+            return output[-1, :, :], hidden_query[-1, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
         else:
             return output
 
@@ -189,7 +189,7 @@ class HRED():
         """
 
         # Making embeddings for x
-        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size)
+        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size, reuse=True)
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
@@ -200,7 +200,8 @@ class HRED():
             (embedder, x_mask),
             name='query_encoder',
             x_dim=self.embedding_size,
-            y_dim=self.query_hidden_size
+            y_dim=self.query_hidden_size,
+            reuse=True
         ))
 
         # This part does the same, yet for the session encoder. Here we need to have the possibility to keep the current
@@ -210,7 +211,8 @@ class HRED():
             (query_encoder, x_mask),
             name='session_encoder',
             x_dim=self.query_hidden_size,
-            y_dim=self.session_hidden_size
+            y_dim=self.session_hidden_size,
+            reuse=True
         ))
 
         # This part makes the decoder for a step. The decoder uses both the word embeddings, the reset/retain vector
@@ -222,7 +224,8 @@ class HRED():
             name='decoder',
             x_dim=self.embedding_size,
             h_dim=self.session_hidden_size,
-            y_dim=self.decoder_hidden_size
+            y_dim=self.decoder_hidden_size,
+            reuse=True
         )
 
         decoder = hidden_decoder
@@ -233,14 +236,16 @@ class HRED():
             x_dim=self.embedding_size,
             h_dim=self.decoder_hidden_size,
             s_dim=self.session_hidden_size,
-            y_dim=self.output_hidden_size
+            y_dim=self.output_hidden_size,
+            reuse=True
         )
 
         # We compute the output logits based on the output layer above
         logits = layers.logits_layer(
             output,
             x_dim=self.output_hidden_size,
-            y_dim=self.vocab_size
+            y_dim=self.vocab_size,
+            reuse=True
         )
 
         softmax = self.softmax(logits)

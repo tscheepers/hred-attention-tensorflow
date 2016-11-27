@@ -21,6 +21,8 @@ VALIDATION_TFR = '../../data/tfrecords/valid.tfrecords'
 TEST_TFR = '../../data/tfrecords/test.tfrecords'
 SMALL_TFR = '../../data/tfrecords/small.tfrecords'
 
+CHECKPOINT_FILE = '../../checkpoints/model.ckpt'
+
 DATA_FILE = TRAIN_FILE
 
 if __name__ == '__main__':
@@ -48,12 +50,18 @@ if __name__ == '__main__':
         loss = hred.loss(logits, Y)
         softmax = hred.softmax(logits)
 
-        optimizer = Optimizer(loss, initial_learning_rate=1e-2, max_global_norm=1.0)
-        optimize = optimizer.optimize_op
+        optimizer = Optimizer(loss, learning_rate=1e-2, max_global_norm=1.0)
+
+        # Add an op to initialize the variables.
+        init_op = tf.initialize_all_variables()
+
+        # Add ops to save and restore all the variables.
+        saver = tf.train.Saver()
 
         with tf.Session() as sess:
 
-            sess.run(tf.initialize_all_variables())
+            sess.run(init_op)
+
             summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
 
             batch_size = 80#80 #200#10 # 200 #10
@@ -77,7 +85,7 @@ if __name__ == '__main__':
                     # print "y", y_batch
 
                     loss_out, _, softmax_out = sess.run(
-                        [loss, optimize, softmax],
+                        [loss, optimizer.optimize_op, softmax],
                         hred.populate_feed_dict_with_defaults(
                             batch_size=batch_size,
                             feed_dict={X: x_batch, Y: y_batch}
@@ -85,6 +93,10 @@ if __name__ == '__main__':
                     )
                     print("Loss: %f" % loss_out)
                     print("Softmax", np.argmax(softmax_out, axis=2))
+
+                    # Save the variables to disk.
+                    save_path = saver.save(sess, CHECKPOINT_FILE)
+                    print("Model saved in file: %s" % save_path)
 
                     # and reset
                     idx = 0

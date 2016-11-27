@@ -8,6 +8,9 @@ from hred import HRED
 
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
+
+CHECKPOINT_FILE = '../../checkpoints/model.ckpt'
+
 if __name__ == '__main__':
     with tf.Graph().as_default():
         hred = HRED()
@@ -15,16 +18,25 @@ if __name__ == '__main__':
         max_length = None
 
         X = tf.placeholder(tf.int32, shape=(max_length, batch_size))
-        X_beam = tf.placeholder(tf.int32, shape=(batch_size,))
-        H_query = tf.placeholder(tf.int32, shape=(batch_size, hred.query_hidden_size))
-        H_session = tf.placeholder(tf.int32, shape=(batch_size, hred.session_hidden_size))
-        H_decoder = tf.placeholder(tf.int32, shape=(batch_size, hred.decoder_hidden_size))
+        X_beam = tf.placeholder(tf.int32, shape=(batch_size, ))
+        H_query = tf.placeholder(tf.float32, shape=(batch_size, hred.query_hidden_size))
+        H_session = tf.placeholder(tf.float32, shape=(batch_size, hred.session_hidden_size))
+        H_decoder = tf.placeholder(tf.float32, shape=(batch_size, hred.decoder_hidden_size))
 
-        session_result = hred.step_through_session(X, return_hidden_states=True, return_softmax=True)
+        session_result = hred.step_through_session(X, return_last_with_hidden_states=True, return_softmax=True)
         step_result = hred.single_step(X_beam, H_query, H_session, H_decoder)
 
+        # Add ops to save and restore all the variables.
+        saver = tf.train.Saver()
+
         with tf.Session() as sess:
-            x = np.array([[10, 11, 12, hred.eoq_symbol, 13, 14, 15, hred.eoq_symbol, 16, 17, 18, hred.eoq_symbol]])
+
+            # Restore variables from disk.
+            saver.restore(sess, CHECKPOINT_FILE)
+            print("Model restored.")
+
+            x = np.array([10, 11, 12, hred.eoq_symbol, 13, 14, 15, hred.eoq_symbol, 16, 17, 18, hred.eoq_symbol])
+            x = np.expand_dims(x, 1)
             batch_size = 1
 
             softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(session_result,
@@ -34,15 +46,20 @@ if __name__ == '__main__':
                 )
             )
 
-            x = np.argmax(softmax_out, axis=2)
+            x = np.argmax(softmax_out, axis=1)
+            print(x)
 
-            while x != hred.eoq_symbol:
+            i = 0
+            max_i = 100
 
-                print(x)
+            while x != hred.eoq_symbol and i < max_i:
 
                 softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
-                    session_result,
+                    step_result,
                     {X_beam: x, H_query: hidden_query, H_session: hidden_session, H_decoder: hidden_decoder}
                 )
 
-                x = np.argmax(softmax_out, axis=2)
+                x = np.argmax(softmax_out, axis=1)
+                print(x)
+
+                i += 1
