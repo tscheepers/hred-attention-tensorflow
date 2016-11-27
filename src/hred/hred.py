@@ -26,7 +26,7 @@ class HRED():
         self.session_hidden_size = 1024  # 5
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
-        self.eoq_symbol = 1  # End of Query symbol
+        self.eoq_symbol = 2  # End of Query symbol
 
         self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
         self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
@@ -80,6 +80,8 @@ class HRED():
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
         x_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
+
+        x_mask = tf.Print(x_mask, [x_mask[:,1,:], x_mask[:,2,:], x_mask[:,4,:]], message="This is x_mask: ", summarize=1000)
 
         # Computes the encoded query state. The tensorflow scan function repeatedly applies the gru_layer_with_reset
         # function to (embedder, x_mask) and it initialized the gru layer with the zero tensor.
@@ -270,6 +272,8 @@ class HRED():
         """
 
         labels = tf.one_hot(labels, self.vocab_size)
+
+        # return -tf.reduce_sum(labels * tf.log( tf.nn.softmax(logits) + 1e-50))
 
         return tf.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)

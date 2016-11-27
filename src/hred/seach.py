@@ -11,6 +11,9 @@ tf.logging.set_verbosity(tf.logging.DEBUG)
 
 CHECKPOINT_FILE = '../../checkpoints/model.ckpt'
 
+# For beam search example:
+# https://github.com/tensorflow/tensorflow/issues/654#issuecomment-168237741
+
 if __name__ == '__main__':
     with tf.Graph().as_default():
         hred = HRED()

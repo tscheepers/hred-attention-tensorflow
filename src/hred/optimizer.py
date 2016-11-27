@@ -23,7 +23,7 @@ class Optimizer(object):
         grad_var_pairs = zip(grads, trainables)
 
         self.global_step = tf.Variable(0, trainable=False, dtype=tf.int32)
-        optimizer = tf.train.RMSPropOptimizer(learning_rate)
+        optimizer = tf.train.AdamOptimizer()
         self._optimize_op = optimizer.apply_gradients(grad_var_pairs, global_step=self.global_step)
 
     @property
