@@ -95,8 +95,8 @@ if __name__ == '__main__':
                     print("Softmax", np.argmax(softmax_out, axis=2))
 
                     # Save the variables to disk.
-                    save_path = saver.save(sess, CHECKPOINT_FILE)
-                    print("Model saved in file: %s" % save_path)
+                    # save_path = saver.save(sess, CHECKPOINT_FILE)
+                    # print("Model saved in file: %s" % save_path)
 
                     # and reset
                     idx = 0
