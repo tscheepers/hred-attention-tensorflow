@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from tensorflow.contrib.layers.python.layers import initializers
 
 import layers
@@ -16,21 +17,43 @@ class HRED():
      the previous queries in the session.
     """
 
-
     def __init__(self):
         # We do not need to define parameters explicitly since tf.get_variable() also creates parameters for us
 
-        self.vocab_size = 90004 #6
-        self.embedding_size = 256 #3
-        self.query_hidden_size = 512 #4
-        self.session_hidden_size = 1024 #5
+        self.vocab_size = 90004  # 6
+        self.embedding_size = 256  # 3
+        self.query_hidden_size = 512  # 4
+        self.session_hidden_size = 1024  # 5
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
 
-    def step(self, X, start_hidden_query, start_hidden_session, start_hidden_decoder, start_output, start_logits):
+        self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
+        self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
+        self.start_hidden_decoder = tf.placeholder(tf.float32, (None, self.decoder_hidden_size))
+        self.start_output = tf.placeholder(tf.float32, (None, self.output_hidden_size))
+        self.start_logits = tf.placeholder(tf.float32, (None, self.vocab_size))
+
+    def populate_feed_dict_with_defaults(self, batch_size=1, feed_dict=None):
         """
-        Performs a step in the HRED
+        Add zero hidden states to a feed dict
+        """
+
+        if feed_dict is None:
+            feed_dict = dict()
+
+        feed_dict[self.start_hidden_query] = np.zeros((2, batch_size, self.query_hidden_size))
+        feed_dict[self.start_hidden_session] = np.zeros((2, batch_size, self.session_hidden_size))
+        feed_dict[self.start_hidden_decoder] = np.zeros((batch_size, self.decoder_hidden_size))
+        feed_dict[self.start_output] = np.zeros((batch_size, self.output_hidden_size))
+        feed_dict[self.start_logits] = np.zeros((batch_size, self.vocab_size))
+
+        return feed_dict
+
+    def step_through_session(self, X, start_hidden_query=None, start_hidden_session=None, start_hidden_decoder=None,
+                      start_output=None, start_logits=None, return_hidden_states=True, return_softmax=True):
+        """
+        Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
         :param X: The input sessions. Lists of ints, ints correspond to words
         Shape: (max_length x batch_size)
@@ -44,6 +67,12 @@ class HRED():
         :param start_logits:
         :return:
         """
+
+        if start_hidden_query is None: start_hidden_query = self.start_hidden_query
+        if start_hidden_session is None: start_hidden_session = self.start_hidden_session
+        if start_hidden_decoder is None: start_hidden_decoder = self.start_hidden_decoder
+        if start_output is None: start_output = self.start_output
+        if start_logits is None: start_logits = self.start_logits
 
         # Making embeddings for x
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size)
@@ -68,13 +97,13 @@ class HRED():
             initializer=start_hidden_query
         )
 
-        query_encoder, _ = tf.unpack(query_encoder_packed, axis=1)
+        query_encoder, hidden_query = tf.unpack(query_encoder_packed, axis=1)
 
         # This part does the same, yet for the session encoder. Here we need to have the possibility to keep the current
         # state where we were at, namely if we have not seen a full query. If we have, update the session encoder state.
         session_encoder_packed = tf.scan(
             lambda result_prev, x: layers.gru_layer_with_retain(
-                result_prev[1], # h_retain_prev
+                result_prev[1],  # h_retain_prev
                 x,
                 name='session_encoder',
                 x_dim=self.query_hidden_size,
@@ -84,7 +113,7 @@ class HRED():
             initializer=start_hidden_session
         )
 
-        session_encoder, _ = tf.unpack(session_encoder_packed, axis=1)
+        session_encoder, hidden_session = tf.unpack(session_encoder_packed, axis=1)
 
         # This part makes the decoder for a step. The decoder uses both the word embeddings, the reset/retain vector
         # and the session encoder, so we give three variables to the decoder GRU. The decoder GRU is somewhat special,
@@ -104,8 +133,8 @@ class HRED():
 
         # After the decoder we add an additional output layer
         # TODO: This should not have to be a scan function but  because of Tensorflow's 2-D matmul function we do this
-        # for now.
-        output = tf.scan(
+        # for now. Perhaps with tf.batch_matmul ?
+        output_layer = tf.scan(
             lambda _, x: layers.output_layer(
                 x,
                 x_dim=self.embedding_size,
@@ -119,28 +148,124 @@ class HRED():
 
         # We compute the output logits based on the output layer above
         # TODO: This should not have to be a scan function but because of Tensorflow's 2-D matmul function we do this
-        # for now. tf.nn.softmax does accept a 3-D tensor however
+        # for now. Perhaps with tf.batch_matmul ? tf.nn.softmax does accept a 3-D tensor however.
         logits = tf.scan(
             lambda _, x: layers.logits_layer(
                 x,
                 x_dim=self.output_hidden_size,
                 y_dim=self.vocab_size
             ),
-            output,
+            output_layer,
             initializer=start_logits
         )
 
-        return logits
+        # If we want the softmax back from this step or just the logits for the loss function
+        if return_softmax:
+            output = self.softmax(logits)
+        else:
+            output = logits
+
+        # If we want to continue decoding with single_step we need the hidden states of all GRU layers
+        if return_hidden_states:
+            hidden_decoder = decoder  # there is no resetted decoder output
+            return output, hidden_query, hidden_session, hidden_decoder
+        else:
+            return output
+
+    def single_step(self, X, prev_hidden_query, prev_hidden_session, prev_hidden_decoder):
+        """
+        Performs a step in the HRED X can be a 2-D tensor (batch, vocab), this can be used
+        for beam search
+
+        :param X: The input sessions. Lists of ints, ints correspond to words
+        Shape: (max_length)
+        :param start_hidden_query: The first hidden state of the query encoder. Initialized with zeros.
+        Shape: (2 x query_hidden_size)
+        :param start_hidden_session: The first hidden state of the session encoder. Iniitalized with zeros.
+        Shape: (2 x session_hidden_size)
+        :param start_hidden_decoder: The first hidden state of the decoder. Initialized with zeros.
+        Shape: (output_hidden_size)
+        :return:
+        """
+
+        # Making embeddings for x
+        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size)
+
+        # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
+        # session encoder when EoQ symbol has been seen yet.
+        x_mask = tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32)
+
+        query_encoder, hidden_query = tf.unpack(layers.gru_layer_with_reset(
+            prev_hidden_query,  # h_reset_prev
+            (embedder, x_mask),
+            name='query_encoder',
+            x_dim=self.embedding_size,
+            y_dim=self.query_hidden_size
+        ))
+
+        # This part does the same, yet for the session encoder. Here we need to have the possibility to keep the current
+        # state where we were at, namely if we have not seen a full query. If we have, update the session encoder state.
+        session_encoder, hidden_session = tf.unpack(layers.gru_layer_with_retain(
+            prev_hidden_session,  # h_retain_prev
+            (query_encoder, x_mask),
+            name='session_encoder',
+            x_dim=self.query_hidden_size,
+            y_dim=self.session_hidden_size
+        ))
+
+        # This part makes the decoder for a step. The decoder uses both the word embeddings, the reset/retain vector
+        # and the session encoder, so we give three variables to the decoder GRU. The decoder GRU is somewhat special,
+        # as it incorporates the session_encoder into each hidden state update
+        hidden_decoder = layers.gru_layer_with_state_reset(
+            prev_hidden_decoder,
+            (embedder, x_mask, session_encoder),
+            name='decoder',
+            x_dim=self.embedding_size,
+            h_dim=self.session_hidden_size,
+            y_dim=self.decoder_hidden_size
+        )
+
+        decoder = hidden_decoder
+
+        # After the decoder we add an additional output layer
+        output = layers.output_layer(
+            (decoder, embedder, session_encoder),
+            x_dim=self.embedding_size,
+            h_dim=self.decoder_hidden_size,
+            s_dim=self.session_hidden_size,
+            y_dim=self.output_hidden_size
+        )
+
+        # We compute the output logits based on the output layer above
+        logits = layers.logits_layer(
+            output,
+            x_dim=self.output_hidden_size,
+            y_dim=self.vocab_size
+        )
+
+        softmax = self.softmax(logits)
+
+        return softmax, hidden_query, hidden_session, hidden_decoder
 
     def softmax(self, logits):
+        """
+        Perform a simple softmax function on the logits
+        logits can be a 3-D tensor or a 2-D tensor
+        """
 
         return tf.nn.softmax(logits)
 
     def loss(self, logits, labels):
+        """
+        Calculate the loss for logits. both logits and
+        labels can be both a 3-D and 2-D tensor
+
+        You do not have to pass a one hot vector for the labels,
+        this does this method for you
+        """
 
         labels = tf.one_hot(labels, self.vocab_size)
 
         return tf.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
         )
-

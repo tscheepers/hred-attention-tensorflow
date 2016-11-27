@@ -2,9 +2,11 @@
 """
 
 import numpy as np
+import tensorflow as tf
+
+tf.logging.set_verbosity(tf.logging.DEBUG)
 
 from hred import HRED
-import tensorflow as tf
 from optimizer import Optimizer
 import read_data
 
@@ -22,6 +24,7 @@ SMALL_TFR = '../../data/tfrecords/small.tfrecords'
 DATA_FILE = TRAIN_FILE
 
 if __name__ == '__main__':
+
     with tf.Graph().as_default():
 
         hred = HRED()
@@ -30,11 +33,6 @@ if __name__ == '__main__':
 
         X = tf.placeholder(tf.int32, shape=(max_length, batch_size))
         Y = tf.placeholder(tf.int32, shape=(max_length, batch_size))
-        HQ0 = tf.placeholder(tf.float32, (2, batch_size, hred.query_hidden_size))
-        HS0 = tf.placeholder(tf.float32, (2, batch_size, hred.session_hidden_size))
-        HD0 = tf.placeholder(tf.float32, (batch_size, hred.decoder_hidden_size))
-        O0 = tf.placeholder(tf.float32, (batch_size, hred.output_hidden_size))
-        L0 = tf.placeholder(tf.float32, (batch_size, hred.vocab_size))
 
         # STUFF for pipeline
         # input, label = read_data.read_and_decode(SMALL_TFR)
@@ -45,18 +43,12 @@ if __name__ == '__main__':
         #     min_after_dequeue=1000)
         #
         # print input_batch.values
-        #
-        # logits = hred.step(input_batch.values, HQ0, HS0, HD0, O0, L0)
-        #
-        # loss = hred.loss(input_batch, labels_batch)
 
-        logits = hred.step(X, HQ0, HS0, HD0, O0, L0)
+        logits = hred.step_through_session(X)
         loss = hred.loss(logits, Y)
         softmax = hred.softmax(logits)
 
-        optimizer = Optimizer(loss, initial_learning_rate=1e-2, num_steps_per_decay=15000,
-                              decay_rate=0.1, max_global_norm=1.0)
-
+        optimizer = Optimizer(loss, initial_learning_rate=1e-2, max_global_norm=1.0)
         optimize = optimizer.optimize_op
 
         with tf.Session() as sess:
@@ -77,11 +69,6 @@ if __name__ == '__main__':
             for (x, y) in read_data.read_data(DATA_FILE):
                 if idx == batch_size:
                     # do your stuff
-                    hq0 = np.zeros((2, batch_size, hred.query_hidden_size))
-                    hs0 = np.zeros((2, batch_size, hred.session_hidden_size))
-                    hd0 = np.zeros((batch_size, hred.decoder_hidden_size))
-                    o0 = np.zeros((batch_size, hred.output_hidden_size))
-                    l0 = np.zeros((batch_size, hred.vocab_size))
 
                     x_batch = np.transpose(np.asarray(x_batch))
                     y_batch = np.transpose(np.asarray(y_batch))
@@ -89,12 +76,15 @@ if __name__ == '__main__':
                     # print "x", x_batch
                     # print "y", y_batch
 
-                    loss_out, _, soft_max = sess.run(
+                    loss_out, _, softmax_out = sess.run(
                         [loss, optimize, softmax],
-                        {X: x_batch, Y: y_batch, HQ0: hq0, HS0: hs0, HD0: hd0, O0: o0, L0: l0}
+                        hred.populate_feed_dict_with_defaults(
+                            batch_size=batch_size,
+                            feed_dict={X: x_batch, Y: y_batch}
+                        )
                     )
                     print("Loss: %f" % loss_out)
-                    print("softmax", np.argmax(soft_max, axis=2))
+                    print("Softmax", np.argmax(softmax_out, axis=2))
 
                     # and reset
                     idx = 0

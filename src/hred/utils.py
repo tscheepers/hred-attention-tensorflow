@@ -19,7 +19,6 @@ def orthogonal_initializer(scale=1.01):
         # pick the one with the correct shape
         q = u if u.shape == flat_shape else v
         q = q.reshape(shape)  # this needs to be corrected to float32
-        # print('you have initialized one orthogonal matrix.')
         return tf.constant(scale * q[:shape[0], :shape[1]], dtype=dtype)
 
     return _initializer
