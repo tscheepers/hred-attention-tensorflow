@@ -77,7 +77,7 @@ def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=51
             W = tf.get_variable(name='weight', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             b = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
 
-            h_prev_state = retain_vector * h_prev + (np.float32(1.0) - retain_vector) * tf.tanh(tf.matmul(state, W) + b)
+            h_prev_state = retain_vector * h_prev + tf.sub(np.float32(1.0), retain_vector) * tf.tanh(tf.matmul(state, W) + b)
 
         h = _gru_layer_with_state(h_prev_state, x, state, 'gru', x_dim, y_dim, h_dim, reuse=reuse)
 
@@ -153,7 +153,7 @@ def _gru_layer(h_prev, x, name='gru', x_dim=256, y_dim=512, reuse=None):
             h_tilde = tf.tanh(tf.matmul(x, Wi_h_tilde)) + tf.matmul(r * h_prev, Wh_h_tilde) + b_h_tilde
 
         # Final update
-        h = (np.float32(1.0) - z) * h_prev + z * h_tilde
+        h = tf.sub(np.float32(1.0), z) * h_prev + z * h_tilde
 
     return h
 
@@ -194,6 +194,6 @@ def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h
                       b_h_tilde
 
         # Final update
-        h = (np.float32(1.0) - z) * h_prev + z * h_tilde
+        h = tf.sub(np.float32(1.0), z) * h_prev + z * h_tilde
 
     return h

@@ -7,3 +7,4 @@ data/aol-data.tar
 src/preprocess/features-ranking/data/
 data/
 src/hred/logs/
+checkpoints/
