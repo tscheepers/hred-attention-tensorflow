@@ -8,8 +8,8 @@ TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_test_session.out'
 #eos = ' 2 '
 eos = 2 #'2'
-max_len = 12
-pad = 3
+max_len = 20 #60 #12
+pad = eos #3
 
 TRAIN_TFR = '../../data/tfrecords/train.tfrecords'
 VALIDATION_TFR = '../../data/tfrecords/valid.tfrecords'
@@ -105,8 +105,10 @@ def read_data(data_file):
             input = [int(x) for x in line.strip().replace('\t', ' 1 ').split()] #[map(int, x.split()) for x in line.strip().split('\t')]
             label = input[1:] + [eos]
 
+            # If the length of the current session is longer than max len, we remove the part that is too much
             if len(input) > max_len:
-                continue
+                input = input[:max_len]
+                label = label[:max_len-1] + [eos]
             else:
                 padding = [pad for i in range(max_len - len(input))]
                 input += padding

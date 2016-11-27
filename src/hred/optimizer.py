@@ -30,7 +30,8 @@ class Optimizer(object):
         learning_rate = tf.train.exponential_decay(
             initial_learning_rate, global_step, num_steps_per_decay,
             decay_rate, staircase=True)
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate) # using the RMSPropOptimizer, just like in the paper
+        #optimizer = tf.train.GradientDescentOptimizer(learning_rate)
         self._optimize_op = optimizer.apply_gradients(grad_var_pairs,
                                                       global_step=global_step)
 

@@ -64,7 +64,7 @@ if __name__ == '__main__':
             sess.run(tf.initialize_all_variables())
             summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
 
-            batch_size = 200#10 # 200 #10
+            batch_size = 80#80 #200#10 # 200 #10
             max_length = 5
             iterations = 1 #6 # 100
 
