@@ -103,6 +103,8 @@ class HRED():
         )
 
         # After the decoder we add an additional output layer
+        # TODO: This should not have to be a scan function but  because of Tensorflow's 2-D matmul function we do this
+        # for now.
         output = tf.scan(
             lambda _, x: layers.output_layer(
                 x,
@@ -116,6 +118,8 @@ class HRED():
         )
 
         # We compute the output logits based on the output layer above
+        # TODO: This should not have to be a scan function but because of Tensorflow's 2-D matmul function we do this
+        # for now. tf.nn.softmax does accept a 3-D tensor however
         logits = tf.scan(
             lambda _, x: layers.logits_layer(
                 x,
