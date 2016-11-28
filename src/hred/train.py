@@ -57,29 +57,36 @@ if __name__ == '__main__':
             batch_size = 80
             max_length = 60
             max_iterations = 1
+            max_epochs = 5
+            iteration = 0
 
-            for i, (x_batch, y_batch) in enumerate(read_data.read_batch(
-                    SMALL_FILE,
-                    batch_size=batch_size,
-                    max_len=max_length
-            )):
+            for epoch in range(max_epochs):
 
-                x_batch = np.transpose(np.asarray(x_batch))
-                y_batch = np.transpose(np.asarray(y_batch))
-
-                # print "x", x_batch
-                # print "y", y_batch
-
-                loss_out, _, softmax_out = sess.run(
-                    [loss, optimizer.optimize_op, softmax],
-                    hred.populate_feed_dict_with_defaults(
+                for (x_batch, y_batch) in read_data.read_batch(
+                        SMALL_FILE,
                         batch_size=batch_size,
-                        feed_dict={X: x_batch, Y: y_batch}
-                    )
-                )
-                print("Loss %d: %f" % (i, loss_out))
-                print("Softmax", np.argmax(softmax_out, axis=2))
+                        max_len=max_length
+                ):
+                    iteration += 1
 
-                # Save the variables to disk.
-                # save_path = saver.save(sess, CHECKPOINT_FILE)
-                # print("Model saved in file: %s" % save_path)
+                    x_batch = np.transpose(np.asarray(x_batch))
+                    y_batch = np.transpose(np.asarray(y_batch))
+
+                    # print "x", x_batch
+                    # print "y", y_batch
+
+                    loss_out, _, softmax_out = sess.run(
+                        [loss, optimizer.optimize_op, softmax],
+                        hred.populate_feed_dict_with_defaults(
+                            batch_size=batch_size,
+                            feed_dict={X: x_batch, Y: y_batch}
+                        )
+                    )
+                    print("Loss %d: %f" % (iteration, loss_out))
+
+                    if iteration % 10 == 0:
+                        print("Softmax", np.argmax(softmax_out, axis=2))
+
+            # Save the variables to disk.
+            save_path = saver.save(sess, CHECKPOINT_FILE)
+            print("Model saved in file: %s" % save_path)
