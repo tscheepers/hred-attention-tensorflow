@@ -34,6 +34,7 @@ if __name__ == '__main__':
         logits = hred.step_through_session(X)
         loss = hred.loss(X, logits, Y)
         softmax = hred.softmax(logits)
+        accuracy = hred.accuracy(logits, Y)
 
         optimizer = Optimizer(loss, learning_rate=0.0002, max_global_norm=1.0)
 
@@ -69,8 +70,8 @@ if __name__ == '__main__':
                     # print "y", y_batch
                     # print "seq len", seq_len
 
-                    loss_out, _, softmax_out = sess.run(
-                        [loss, optimizer.optimize_op, softmax],
+                    loss_out, _, softmax_out, acc_out = sess.run(
+                        [loss, optimizer.optimize_op, softmax, accuracy],
                         hred.populate_feed_dict_with_defaults(
                             batch_size=batch_size,
                             feed_dict={X: x_batch, Y: y_batch}
@@ -79,6 +80,7 @@ if __name__ == '__main__':
 
                     if iteration % 10 == 0:
                         print("Loss %d: %f" % (iteration, loss_out))
+                        print("Acc %d: %f" % (iteration, acc_out))
 
                     if iteration % 100 == 0:
                         print("Input", x_batch)

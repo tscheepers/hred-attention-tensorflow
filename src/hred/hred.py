@@ -275,11 +275,14 @@ class HRED():
         this does this method for you
         """
 
-        # labels = tf.Print(labels, [labels[:, 1]], message="This is labels: ", summarize=5)
+        # labels = tf.Print(labels, [labels], message="This is labels: ")
+        # logits = tf.Print(logits, [logits], message="This logits: ")
 
         labels = tf.one_hot(labels, self.vocab_size)
 
         # logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
+        # logits = tf.Print(logits, [tf.argmax(logits,1)], message="This is arg max logits: ")
+
         # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
         # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
 
@@ -295,6 +298,15 @@ class HRED():
         )
 
         return loss
+
+    def accuracy(self, logits, labels):
+
+        #eos_mask = tf.expand_dims(tf.cast(tf.not_equal(labels, self.eos_symbol), tf.float32), 2)
+
+        labels = tf.cast(labels, tf.float32)
+        correct_prediction = tf.equal(tf.cast(np.argmax(self.softmax(logits)), tf.float32), labels)
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        return accuracy
 
     def set_seq_len(self, seq_len):
         """ An Operation that takes one optimization step. """

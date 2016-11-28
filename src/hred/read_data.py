@@ -60,6 +60,6 @@ def add_padding(batch, eoq_symbol=1, pad_symbol=2, max_seq_len=50):
     return padded_batch, max_len
 
 
-def add_padding_and_sort(batch):
+def add_padding_and_sort(batch, eoq_symbol, pad_symbol, max_seq_len):
     sorted_batch = batch.sort(key=len)
-    add_padding(sorted_batch)
+    add_padding(sorted_batch, eoq_symbol, pad_symbol, max_seq_len)
