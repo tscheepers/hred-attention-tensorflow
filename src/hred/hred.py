@@ -27,6 +27,7 @@ class HRED():
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
+        self.eos_symbol = 2 # End of Session symbol
 
         self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
         self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
@@ -74,18 +75,19 @@ class HRED():
         if start_output is None: start_output = self.start_output
         if start_logits is None: start_logits = self.start_logits
 
-        # X = tf.Print(X, [X[:, 1], X[:, 2], X[:, 4]], message="This is X: ", summarize=20)
+        # X = tf.Print(X, [X[:, 0]], message="This is X: ", summarize=20)
 
         # Making embeddings for x
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size)
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
-        x_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
-        # x_mask = tf.Print(x_mask, [x_mask[:,1,:], x_mask[:,2,:], x_mask[:,4,:]], message="This is x_mask: ", summarize=20)
+        eos_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eos_symbol), tf.float32), 2)
+        eoq_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
+        # eoq_mask = tf.Print(eoq_mask, [eoq_mask[:,0,:]], message="This is eoq_mask: ", summarize=20)
 
         # Computes the encoded query state. The tensorflow scan function repeatedly applies the gru_layer_with_reset
-        # function to (embedder, x_mask) and it initialized the gru layer with the zero tensor.
+        # function to (embedder, eoq_mask) and it initialized the gru layer with the zero tensor.
         # In the query encoder we need the possibility to reset the gru layer, namely after the eos symbol has been
         # reached
         query_encoder_packed = tf.scan(
@@ -96,7 +98,7 @@ class HRED():
                 x_dim=self.embedding_size,
                 y_dim=self.query_hidden_size
             ),
-            (embedder, x_mask),  # scan does not accept multiple tensors so we need to pack and unpack
+            (embedder, eoq_mask, eos_mask),  # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_query
         )
 
@@ -112,7 +114,7 @@ class HRED():
                 x_dim=self.query_hidden_size,
                 y_dim=self.session_hidden_size
             ),
-            (query_encoder, x_mask),
+            (query_encoder, eoq_mask, eos_mask),
             initializer=start_hidden_session
         )
 
@@ -130,7 +132,7 @@ class HRED():
                 h_dim=self.session_hidden_size,
                 y_dim=self.decoder_hidden_size
             ),
-            (embedder, x_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
+            (embedder, eoq_mask, eos_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_decoder
         )
 
@@ -197,11 +199,11 @@ class HRED():
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
-        x_mask = tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32)
+        eoq_mask = tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32)
 
         query_encoder, hidden_query = tf.unpack(layers.gru_layer_with_reset(
             prev_hidden_query,  # h_reset_prev
-            (embedder, x_mask),
+            (embedder, eoq_mask),
             name='query_encoder',
             x_dim=self.embedding_size,
             y_dim=self.query_hidden_size,
@@ -212,7 +214,7 @@ class HRED():
         # state where we were at, namely if we have not seen a full query. If we have, update the session encoder state.
         session_encoder, hidden_session = tf.unpack(layers.gru_layer_with_retain(
             prev_hidden_session,  # h_retain_prev
-            (query_encoder, x_mask),
+            (query_encoder, eoq_mask),
             name='session_encoder',
             x_dim=self.query_hidden_size,
             y_dim=self.session_hidden_size,
@@ -224,7 +226,7 @@ class HRED():
         # as it incorporates the session_encoder into each hidden state update
         hidden_decoder = layers.gru_layer_with_state_reset(
             prev_hidden_decoder,
-            (embedder, x_mask, session_encoder),
+            (embedder, eoq_mask, session_encoder),
             name='decoder',
             x_dim=self.embedding_size,
             h_dim=self.session_hidden_size,

@@ -28,10 +28,10 @@ def gru_layer_with_reset(h_prev, x_packed, name='gru', x_dim=256, y_dim=512, reu
     """
 
     # Unpack mandatory packed force_reset_vector, x = embedding
-    x, reset_vector = x_packed
+    x, reset_vector, force_reset_vector = x_packed
 
     with tf.variable_scope(name):
-        h = _gru_layer(h_prev, x, 'gru', x_dim, y_dim, reuse=reuse)
+        h = force_reset_vector * _gru_layer(h_prev, x, 'gru', x_dim, y_dim, reuse=reuse)
 
         # Force reset hidden state: is set to zero if reset vector consists of zeros
         h_reset = reset_vector * h
@@ -47,11 +47,13 @@ def gru_layer_with_retain(h_prev, x_packed, name='gru', x_dim=256, y_dim=512, re
     :param x_packed: x_packed should be a 2-tuple (embedding, retain vector = x-mask)
     """
 
+    # h_prev = tf.Print(h_prev, [h_prev[0, :]], message="h_prev: ", summarize=5)
+
     # Unpack mandatory packed retain_vector
-    x, retain_vector = x_packed
+    x, retain_vector, force_reset_vector = x_packed
 
     with tf.variable_scope(name):
-        h = _gru_layer(h_prev, x, 'gru', x_dim, y_dim, reuse=reuse)
+        h = force_reset_vector * _gru_layer(h_prev, x, 'gru', x_dim, y_dim, reuse=reuse)
 
         # Force reset hidden state: is h_prev is retain vector consists of ones,
         # is h if retain vector consists of zeros
@@ -69,7 +71,7 @@ def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=51
 
     # Unpack mandatory packed retain_vector and the state
     # x = embedder, ratain_vector = mask, state = session_encoder
-    x, retain_vector, state = x_packed
+    x, retain_vector, force_reset_vector, state = x_packed
 
     with tf.variable_scope(name):
 
@@ -79,7 +81,7 @@ def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=51
 
             h_prev_state = retain_vector * h_prev + tf.sub(np.float32(1.0), retain_vector) * tf.tanh(tf.matmul(state, W) + b)
 
-        h = _gru_layer_with_state(h_prev_state, x, state, 'gru', x_dim, y_dim, h_dim, reuse=reuse)
+        h = force_reset_vector * _gru_layer_with_state(h_prev_state, x, state, 'gru', x_dim, y_dim, h_dim, reuse=reuse)
 
     return h
 
@@ -192,9 +194,9 @@ def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h
         with tf.variable_scope('update_gate', reuse=reuse):
             Wi_z = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             Wh_z = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=initializer.orthogonal_initializer(0.01))
-            Ws_r = tf.get_variable(name='weight_state', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+            Ws_z = tf.get_variable(name='weight_state', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             b_z = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
-            z = tf.sigmoid(tf.matmul(x, Wi_z) + tf.matmul(h_prev, Wh_z) + tf.matmul(state, Ws_r) + b_z)
+            z = tf.sigmoid(tf.matmul(x, Wi_z) + tf.matmul(h_prev, Wh_z) + tf.matmul(state, Ws_z) + b_z)
 
         # Candidate update
         with tf.variable_scope('candidate_update', reuse=reuse):

@@ -52,12 +52,12 @@ if __name__ == '__main__':
 
             sess.run(init_op)
 
-            summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
+            # summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
 
-            batch_size = 80
-            max_length = 60
+            batch_size = 10
+            max_length = 10
             max_iterations = 1
-            max_epochs = 5
+            max_epochs = 100
             iteration = 0
 
             for epoch in range(max_epochs):
@@ -67,8 +67,6 @@ if __name__ == '__main__':
                         batch_size=batch_size,
                         max_len=max_length
                 ):
-                    iteration += 1
-
                     x_batch = np.transpose(np.asarray(x_batch))
                     y_batch = np.transpose(np.asarray(y_batch))
 
@@ -86,6 +84,8 @@ if __name__ == '__main__':
 
                     if iteration % 10 == 0:
                         print("Softmax", np.argmax(softmax_out, axis=2))
+
+                    iteration += 1
 
             # Save the variables to disk.
             save_path = saver.save(sess, CHECKPOINT_FILE)
