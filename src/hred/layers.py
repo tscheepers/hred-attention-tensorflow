@@ -162,13 +162,13 @@ def _rnn_layer(h_prev, x, name='rnn', x_dim=256, y_dim=512, reuse=None):
     Used for both encoder layers
     """
 
-    with tf.variable_scope(name):
+    with tf.variable_scope(name, reuse=reuse):
 
-        Wi_h_tilde = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
-        Wh_h_tilde = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=utils.orthogonal_initializer(0.01))
-        b_h_tilde = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
+        Wi = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+        Wh = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=utils.orthogonal_initializer(0.01))
+        b = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
 
-        h = tf.tanh(tf.matmul(x, Wi_h_tilde)) + tf.matmul(h_prev, Wh_h_tilde) + b_h_tilde
+        h = tf.tanh(tf.matmul(x, Wi)) + tf.matmul(h_prev, Wh) + b
 
     return h
 
