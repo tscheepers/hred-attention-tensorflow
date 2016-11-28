@@ -50,7 +50,7 @@ if __name__ == '__main__':
         loss = hred.loss(logits, Y)
         softmax = hred.softmax(logits)
 
-        optimizer = Optimizer(loss, learning_rate=1e-2, max_global_norm=1.0)
+        optimizer = Optimizer(loss, learning_rate=0.0002, max_global_norm=1.0)
 
         # Add an op to initialize the variables.
         init_op = tf.initialize_all_variables()

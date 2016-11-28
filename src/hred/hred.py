@@ -280,17 +280,6 @@ class HRED():
         # logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
         # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
         # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
-        # softmax = tf.nn.softmax(logits)
-        #
-        # softmax = tf.Print(softmax, [tf.reduce_min(softmax)], message="This is min softmax: ")
-        # softmax = tf.Print(softmax, [tf.reduce_max(softmax)], message="This is min softmax: ")
-        # softmax = tf.Print(softmax, [tf.reduce_max(softmax, reduction_indices=[2])[:, 1]], message="This is max 1st softmax: ", summarize=5)
-        # softmax = tf.Print(softmax, [tf.reduce_sum(softmax, reduction_indices=[2])[:, 1]], message="This is sum 1st softmax: ", summarize=5)
-        # softmax = tf.Print(softmax, [tf.argmax(softmax, dimension=2)[:, 1]], message="This is argmax 1st softmax: ", summarize=5)
-        #
-        # loss_matrix = labels * -tf.log(softmax)
-        #
-        # return tf.reduce_mean(loss_matrix)
 
         return tf.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
