@@ -14,12 +14,6 @@ TRAIN_FILE = '../../data/tr_session.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_train.out'
-eos = '2'
-
-TRAIN_TFR = '../../data/tfrecords/train.tfrecords'
-VALIDATION_TFR = '../../data/tfrecords/valid.tfrecords'
-TEST_TFR = '../../data/tfrecords/test.tfrecords'
-SMALL_TFR = '../../data/tfrecords/small.tfrecords'
 
 CHECKPOINT_FILE = '../../checkpoints/model.ckpt'
 
@@ -37,7 +31,7 @@ if __name__ == '__main__':
         Y = tf.placeholder(tf.int32, shape=(max_length, batch_size))
 
         logits = hred.step_through_session(X)
-        loss = hred.loss(logits, Y)
+        loss = hred.loss(X, logits, Y)
         softmax = hred.softmax(logits)
 
         optimizer = Optimizer(loss, learning_rate=0.0002, max_global_norm=1.0)

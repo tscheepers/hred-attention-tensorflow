@@ -27,7 +27,7 @@ class HRED():
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
-        self.eos_symbol = 2 # End of Session symbol
+        self.eos_symbol = 2  # End of Session symbol
 
         self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
         self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
@@ -82,7 +82,6 @@ class HRED():
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
-        eos_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eos_symbol), tf.float32), 2)
         eoq_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
         # eoq_mask = tf.Print(eoq_mask, [eoq_mask[:,0,:]], message="This is eoq_mask: ", summarize=20)
 
@@ -98,7 +97,7 @@ class HRED():
                 x_dim=self.embedding_size,
                 y_dim=self.query_hidden_size
             ),
-            (embedder, eoq_mask, eos_mask),  # scan does not accept multiple tensors so we need to pack and unpack
+            (embedder, eoq_mask),  # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_query
         )
 
@@ -114,7 +113,7 @@ class HRED():
                 x_dim=self.query_hidden_size,
                 y_dim=self.session_hidden_size
             ),
-            (query_encoder, eoq_mask, eos_mask),
+            (query_encoder, eoq_mask),
             initializer=start_hidden_session
         )
 
@@ -132,7 +131,7 @@ class HRED():
                 h_dim=self.session_hidden_size,
                 y_dim=self.decoder_hidden_size
             ),
-            (embedder, eoq_mask, eos_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
+            (embedder, eoq_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_decoder
         )
 
@@ -266,7 +265,7 @@ class HRED():
 
         return tf.nn.softmax(logits)
 
-    def loss(self, logits, labels):
+    def loss(self, X, logits, labels):
         """
         Calculate the loss for logits. both logits and
         labels can be both a 3-D and 2-D tensor
@@ -283,6 +282,12 @@ class HRED():
         # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
         # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
 
-        return tf.reduce_mean(
+        eos_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eos_symbol), tf.float32), 2)
+        labels = labels * eos_mask
+
+        # loss = -tf.reduce_sum(labels * tf.log(logits))
+        loss = tf.reduce_mean(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
         )
+
+        return loss

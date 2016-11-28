@@ -24,9 +24,12 @@ def read_line(data_file, eoq_symbol=1, eos_symbol=2, pad_symbol=2, max_len=50):
     with open(data_file, 'r') as df:
         for line in df:
 
-            # first replace tab with eoq symbol
+            # first replace tab with eoq symbol, never predict eos_symbol
             input = [int(x) for x in line.strip().replace('\t', ' %d ' % eoq_symbol).split()]
             label = input[1:] + [eoq_symbol]
+
+            # input = [int(x) for x in line.strip().replace('\t', ' %d ' % eoq_symbol).split()] + [eoq_symbol]
+            # label = input[1:] + [eos_symbol]
 
             # If the length of the current session is longer than max len, we remove the part that is too much
             if len(input) > max_len:
