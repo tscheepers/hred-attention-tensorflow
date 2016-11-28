@@ -20,10 +20,10 @@ class HRED():
     def __init__(self):
         # We do not need to define parameters explicitly since tf.get_variable() also creates parameters for us
 
-        self.vocab_size = 90004  # 6
-        self.embedding_size = 256  # 3
-        self.query_hidden_size = 512  # 4
-        self.session_hidden_size = 1024  # 5
+        self.vocab_size = 2504
+        self.embedding_size = 64
+        self.query_hidden_size = 128
+        self.session_hidden_size = 256
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
