@@ -90,7 +90,7 @@ class HRED():
         # reached
         query_encoder_packed = tf.scan(
             lambda result_prev, x: layers.gru_layer_with_reset(
-                result_prev[0],  # h_reset_prev
+                result_prev[1],  # h_reset_prev
                 x,
                 name='query_encoder',
                 x_dim=self.embedding_size,
@@ -102,52 +102,52 @@ class HRED():
 
         query_encoder, hidden_query = tf.unpack(query_encoder_packed, axis=1)
 
-        # # This part does the same, yet for the session encoder. Here we need to have the possibility to keep the current
-        # # state where we were at, namely if we have not seen a full query. If we have, update the session encoder state.
-        # session_encoder_packed = tf.scan(
-        #     lambda result_prev, x: layers.gru_layer_with_retain(
-        #         result_prev[1],  # h_retain_prev
-        #         x,
-        #         name='session_encoder',
-        #         x_dim=self.query_hidden_size,
-        #         y_dim=self.session_hidden_size
-        #     ),
-        #     (query_encoder, x_mask),
-        #     initializer=start_hidden_session
-        # )
-        #
-        # session_encoder, hidden_session = tf.unpack(session_encoder_packed, axis=1)
-        #
-        # # This part makes the decoder for a step. The decoder uses both the word embeddings, the reset/retain vector
-        # # and the session encoder, so we give three variables to the decoder GRU. The decoder GRU is somewhat special,
-        # # as it incorporates the session_encoder into each hidden state update
-        # decoder = tf.scan(
-        #     lambda result_prev, x: layers.gru_layer_with_state_reset(
-        #         result_prev,
-        #         x,
-        #         name='decoder',
-        #         x_dim=self.embedding_size,
-        #         h_dim=self.session_hidden_size,
-        #         y_dim=self.decoder_hidden_size
-        #     ),
-        #     (embedder, x_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
-        #     initializer=start_hidden_decoder
-        # )
-        #
-        # # After the decoder we add an additional output layer
-        # # TODO: This should not have to be a scan function but  because of Tensorflow's 2-D matmul function we do this
-        # # for now. Perhaps with tf.batch_matmul ?
-        # output_layer = tf.scan(
-        #     lambda _, x: layers.output_layer(
-        #         x,
-        #         x_dim=self.embedding_size,
-        #         h_dim=self.decoder_hidden_size,
-        #         s_dim=self.session_hidden_size,
-        #         y_dim=self.output_hidden_size
-        #     ),
-        #     (decoder, embedder, session_encoder),
-        #     initializer=start_output
-        # )
+        # This part does the same, yet for the session encoder. Here we need to have the possibility to keep the current
+        # state where we were at, namely if we have not seen a full query. If we have, update the session encoder state.
+        session_encoder_packed = tf.scan(
+            lambda result_prev, x: layers.gru_layer_with_retain(
+                result_prev[1],  # h_retain_prev
+                x,
+                name='session_encoder',
+                x_dim=self.query_hidden_size,
+                y_dim=self.session_hidden_size
+            ),
+            (query_encoder, x_mask),
+            initializer=start_hidden_session
+        )
+
+        session_encoder, hidden_session = tf.unpack(session_encoder_packed, axis=1)
+
+        # This part makes the decoder for a step. The decoder uses both the word embeddings, the reset/retain vector
+        # and the session encoder, so we give three variables to the decoder GRU. The decoder GRU is somewhat special,
+        # as it incorporates the session_encoder into each hidden state update
+        decoder = tf.scan(
+            lambda result_prev, x: layers.gru_layer_with_state_reset(
+                result_prev,
+                x,
+                name='decoder',
+                x_dim=self.embedding_size,
+                h_dim=self.session_hidden_size,
+                y_dim=self.decoder_hidden_size
+            ),
+            (embedder, x_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
+            initializer=start_hidden_decoder
+        )
+
+        # After the decoder we add an additional output layer
+        # TODO: This should not have to be a scan function but  because of Tensorflow's 2-D matmul function we do this
+        # for now. Perhaps with tf.batch_matmul ?
+        output_layer = tf.scan(
+            lambda _, x: layers.output_layer(
+                x,
+                x_dim=self.embedding_size,
+                h_dim=self.decoder_hidden_size,
+                s_dim=self.session_hidden_size,
+                y_dim=self.output_hidden_size
+            ),
+            (decoder, embedder, session_encoder),
+            initializer=start_output
+        )
 
         # We compute the output logits based on the output layer above
         # TODO: This should not have to be a scan function but because of Tensorflow's 2-D matmul function we do this
@@ -155,10 +155,10 @@ class HRED():
         logits = tf.scan(
             lambda _, x: layers.logits_layer(
                 x,
-                x_dim=self.query_hidden_size,
+                x_dim=self.output_hidden_size,
                 y_dim=self.vocab_size
             ),
-            query_encoder,
+            output_layer,
             initializer=start_logits
         )
 
@@ -277,10 +277,9 @@ class HRED():
 
         labels = tf.one_hot(labels, self.vocab_size)
 
-        logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
-        logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
-        logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
-
+        # logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
+        # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
+        # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
         # softmax = tf.nn.softmax(logits)
         #
         # softmax = tf.Print(softmax, [tf.reduce_min(softmax)], message="This is min softmax: ")
