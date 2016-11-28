@@ -28,6 +28,7 @@ class HRED():
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
         self.eos_symbol = 2  # End of Session symbol
+        self.seq_len = 50  # this should be set at each batch iteration
 
         self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
         self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
@@ -286,6 +287,7 @@ class HRED():
         labels = labels * eos_mask
 
         # logits = tf.clip_by_value(y_conv,1e-10,1.0)
+        # logits -= np.max(logits)
 
         # loss = -tf.reduce_sum(labels * tf.log(logits))
         loss = tf.reduce_mean(
@@ -293,3 +295,7 @@ class HRED():
         )
 
         return loss
+
+    def set_seq_len(self, seq_len):
+        """ An Operation that takes one optimization step. """
+        self.seq_len = seq_len

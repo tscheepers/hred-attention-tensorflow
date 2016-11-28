@@ -11,14 +11,14 @@ from optimizer import Optimizer
 import read_data
 import math
 
-TRAIN_FILE = '../../data/tr_session.out'
+TRAIN_FILE = '../../data/aol_sess_50000.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_train.out'
 
-CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-50000.ckpt'
 
-DATA_FILE = TRAIN_FILE
+DATA_FILE = TRAIN_FILE # TRAIN_FILE
 
 if __name__ == '__main__':
 
@@ -57,16 +57,17 @@ if __name__ == '__main__':
 
             for epoch in range(max_epochs):
 
-                for (x_batch, y_batch) in read_data.read_batch(
-                        TRAIN_FILE,
+                for ((x_batch, y_batch), seq_len) in read_data.read_batch(
+                        DATA_FILE,
                         batch_size=batch_size,
-                        max_len=max_length
+                        max_seq_len=max_length
                 ):
                     x_batch = np.transpose(np.asarray(x_batch))
                     y_batch = np.transpose(np.asarray(y_batch))
 
                     # print "x", x_batch
                     # print "y", y_batch
+                    # print "seq len", seq_len
 
                     loss_out, _, softmax_out = sess.run(
                         [loss, optimizer.optimize_op, softmax],
