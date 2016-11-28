@@ -81,8 +81,8 @@ if __name__ == '__main__':
                     x_batch = np.transpose(np.asarray(x_batch))
                     y_batch = np.transpose(np.asarray(y_batch))
                     # print "idx", idx
-                    print "x", x_batch
-                    print "y", y_batch
+                    # print "x", x_batch
+                    # print "y", y_batch
 
                     loss_out, _, softmax_out = sess.run(
                         [loss, optimizer.optimize_op, softmax],
@@ -92,7 +92,7 @@ if __name__ == '__main__':
                         )
                     )
                     print("Loss: %f" % loss_out)
-                    print("Softmax", np.argmax(softmax_out, axis=2))
+                    # print("Softmax", np.argmax(softmax_out, axis=2))
 
                     # Save the variables to disk.
                     # save_path = saver.save(sess, CHECKPOINT_FILE)
