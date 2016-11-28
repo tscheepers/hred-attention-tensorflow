@@ -20,10 +20,10 @@ class HRED():
     def __init__(self):
         # We do not need to define parameters explicitly since tf.get_variable() also creates parameters for us
 
-        self.vocab_size = 2504
-        self.embedding_size = 64
-        self.query_hidden_size = 128
-        self.session_hidden_size = 256
+        self.vocab_size = 50004
+        self.embedding_size = 256
+        self.query_hidden_size = 512
+        self.session_hidden_size = 1024
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
@@ -289,7 +289,8 @@ class HRED():
         eos_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eos_symbol), tf.float32), 2)
         labels = labels * eos_mask
 
-        #logits -= np.max(logits)
+        # logits = tf.clip_by_value(y_conv,1e-10,1.0)
+        # logits -= np.max(logits)
 
         # loss = -tf.reduce_sum(labels * tf.log(logits))
         loss = tf.reduce_mean(

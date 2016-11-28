@@ -9,15 +9,16 @@ tf.logging.set_verbosity(tf.logging.DEBUG)
 from hred import HRED
 from optimizer import Optimizer
 import read_data
+import math
 
-TRAIN_FILE = '../../data/tr_session.out'
+TRAIN_FILE = '../../data/aol_sess_50000.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_train.out'
 
-CHECKPOINT_FILE = '../../checkpoints/model.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-50000.ckpt'
 
-DATA_FILE = SMALL_FILE # TRAIN_FILE
+DATA_FILE = TRAIN_FILE # TRAIN_FILE
 
 if __name__ == '__main__':
 
@@ -49,21 +50,22 @@ if __name__ == '__main__':
 
             # summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
 
-            batch_size = 10
-            max_length = 10
+            batch_size = 80
+            max_length = 50
             max_iterations = 1
-            max_epochs = 100
+            max_epochs = 1000
             iteration = 0
 
             for epoch in range(max_epochs):
 
                 for ((x_batch, y_batch), seq_len) in read_data.read_batch(
                         DATA_FILE,
-                        batch_size=batch_size
+                        batch_size=batch_size,
+                        max_seq_len=max_length
                 ):
                     x_batch = np.transpose(np.asarray(x_batch))
                     y_batch = np.transpose(np.asarray(y_batch))
-                    #
+
                     # print "x", x_batch
                     # print "y", y_batch
                     # print "seq len", seq_len
@@ -75,14 +77,18 @@ if __name__ == '__main__':
                             feed_dict={X: x_batch, Y: y_batch}
                         )
                     )
-                    print("Loss %d: %f" % (iteration, loss_out))
-                    print("Acc %d: %f" % (iteration, acc_out))
 
                     if iteration % 10 == 0:
+                        print("Loss %d: %f" % (iteration, loss_out))
+                        print("Acc %d: %f" % (iteration, acc_out))
+
+                    if iteration % 100 == 0:
+                        print("Input", x_batch)
                         print("Softmax", np.argmax(softmax_out, axis=2))
 
-                    iteration += 1
+                        if not math.isnan(loss_out):
+                            # Save the variables to disk.
+                            save_path = saver.save(sess, CHECKPOINT_FILE)
+                            print("Model saved in file: %s" % save_path)
 
-            # Save the variables to disk.
-            save_path = saver.save(sess, CHECKPOINT_FILE)
-            print("Model saved in file: %s" % save_path)
+                    iteration += 1
