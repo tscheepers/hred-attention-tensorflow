@@ -71,6 +71,7 @@ def load_vocab_without_freq(vocab_file):
     logger.info("INFO - Vocabulary contains %d words" % len(vocab))
     return vocab
 
+
 def load_vocab(vocab_file):
 
     assert os.path.isfile(vocab_file)
@@ -566,24 +567,26 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    vocab_file = os.path.join(DEFAULT_OUT_PATH, 'aol_vocab_2500.pkl')
+    vocab_file = os.path.join(DEFAULT_OUT_PATH, 'aol_vocab_50000.pkl')
     p = Processor(args.input_dir, num_of_recs=None, vocab_file=vocab_file,
-                 file_to_process=None, vocab_threshold=2500, make_dict=True)
+                 file_to_process=None, vocab_threshold=50000, make_dict=False)
 
     # generates the 4 session files (and corresponding rank file) for background, train, test, validation
     # p.execute()
+    p.translate_words_to_indices(final_proc_options=['bg', 'tr', 'val', 'test'])
     # p.load_bg_session(DEFAULT_OUT_PATH + "bg_session.ctx")
     # vocab = load_vocab(os.path.join(DEFAULT_OUT_PATH, args.vocab_file))
-    # vocab = load_vocab_without_freq(vocab_file)
+    # vocab = load_vocab(vocab_file)
+    # print("Size vocab %d" % len(vocab))
     # c = 0
     # print("Length vocab %d" % len(vocab))
     # for keys, values in vocab.iteritems():
-    #    c += 1
-    #    print keys
-    #    print values
-    #   if c > 10:
-    #        break
-    # make_a_new_vocab(os.path.join(DEFAULT_OUT_PATH, args.vocab_file), 2500)
+    #     c += 1
+    #     print keys
+    #     print values
+    #     if c > 10:
+    #         break
+    # make_a_new_vocab(os.path.join(DEFAULT_OUT_PATH, args.vocab_file), 50000)
     # p.translate_words_to_indices(final_proc_options=['bg', 'tr', 'val', 'test'])
 
     # generate_dict_and_translate(os.path.join(DEFAULT_OUT_PATH, 'bg_session.ctx'))
