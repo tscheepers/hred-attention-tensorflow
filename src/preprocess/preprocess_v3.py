@@ -27,20 +27,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('pre-process AOL data')
 
 
-def load_vocab(vocab_file):
-
-    assert os.path.isfile(vocab_file)
-    vocab = dict([(x[0], x[1]) for x in cPickle.load(open(vocab_file, "r"))])
-    # Check consistency
-    assert '<unk>' in vocab
-    assert '</s>' in vocab
-    assert '</q>' in vocab
-    assert '</p>' in vocab
-    logger.info("INFO - Successfully loaded vocabulary dictionary %s." % vocab_file)
-    logger.info("INFO - Vocabulary contains %d words" % len(vocab))
-    return vocab
-
-
 def safe_pickle(obj, filename):
     if os.path.isfile(filename):
         logger.info("INFO - Overwriting %s." % filename)
@@ -55,6 +41,98 @@ def save_vocab(vocab, word_freq, outfile):
     safe_pickle([(word, word_id, word_freq[word_id]) \
                  for word, word_id in vocab.items()],
                 outfile)
+
+
+def make_a_new_vocab(vocab_file, threshold):
+
+    assert os.path.isfile(vocab_file)
+    vocab_list = [(x[0], x[1], x[2]) for x in cPickle.load(open(vocab_file, "r"))]
+    print(vocab_list[:2])
+    # sort ascending, last threshold items and finally reverse order
+    vocab_list = sorted(vocab_list, key=lambda y: y[2])[-threshold:][::-1]
+    # Add special tokens to the vocabulary
+    vocab = {'<unk>': 0, '</q>': 1, '</s>': 2, '</p>': 3}
+    word_freq = {0: 0, 1: 0, 2: 0, 3: 0}
+    for word, idx, freq in vocab_list:
+        idx = len(vocab)
+        vocab[word] = idx
+        word_freq[idx] = freq
+    logger.info("Vocab size %d" % len(vocab))
+    save_vocab(vocab, word_freq, "aol_vocab_" + str(threshold) + ".pkl")
+
+
+def load_vocab_without_freq(vocab_file):
+    vocab = cPickle.load(open(vocab_file, 'r'))
+    assert '<unk>' in vocab
+    assert '</s>' in vocab
+    assert '</q>' in vocab
+    assert '</p>' in vocab
+    logger.info("INFO - Successfully loaded vocabulary dictionary %s." % vocab_file)
+    logger.info("INFO - Vocabulary contains %d words" % len(vocab))
+    return vocab
+
+def load_vocab(vocab_file):
+
+    assert os.path.isfile(vocab_file)
+    vocab = dict([(x[0], x[1]) for x in cPickle.load(open(vocab_file, "r"))])
+    # Check consistency
+    assert '<unk>' in vocab
+    assert '</s>' in vocab
+    assert '</q>' in vocab
+    assert '</p>' in vocab
+    logger.info("INFO - Successfully loaded vocabulary dictionary %s." % vocab_file)
+    logger.info("INFO - Vocabulary contains %d words" % len(vocab))
+    return vocab
+
+
+def generate_dict_and_translate(session_file, num_of_session=10000, vocab_size=2500, final_out_dir=DEFAULT_OUT_PATH):
+    # Add special tokens to the vocabulary
+    vocab = {'<unk>': 0, '</q>': 1, '</s>': 2, '</p>': 3}
+
+    def word_to_seq(query):
+        query_lst = []
+        for w in query.strip().split():
+            query_lst.append(str(vocab.get(w, 0)))
+        return " ".join(query_lst)
+
+    word_counter = Counter()
+    sess_counter = 0
+    for line in open(session_file, 'r'):
+        s = [x for x in line.strip().split()]
+        word_counter.update(s)
+        sess_counter += 1
+        if sess_counter >= num_of_session:
+            break
+
+    total_freq = sum(word_counter.values())
+    logger.info("Total word frequency in dictionary %d " % total_freq)
+
+    if args.cutoff != -1:
+        logger.info("Cutoff %d" % vocab_size)
+        vocab_count = word_counter.most_common(vocab_size)
+    else:
+        vocab_count = word_counter.most_common()
+
+    for (word, count) in vocab_count:
+        if count < args.min_freq:
+            break
+        vocab[word] = len(vocab)
+
+    safe_pickle(vocab, os.path.join(final_out_dir, "aol_vocab_" + str(vocab_size) + ".pkl"))
+    sess_counter = 0
+
+    outfile = os.path.join(final_out_dir, "aol_sess_windices" + ".sess")
+    with open(outfile, 'w') as f_out:
+        for line in open(session_file, 'r'):
+            queries = line.split('\t')
+            session_list = []
+            for query in queries:
+                session_list.append(word_to_seq(query))
+
+            f_out.write("\t".join(session_list) + "\n")
+            sess_counter += 1
+            if sess_counter >= num_of_session:
+                break
 
 
 def get_files(root_dir):
@@ -119,7 +197,10 @@ class Processor:
         self.vocab_file = vocab_file
         self.word_freq = defaultdict(lambda: 1)
 
-        # The queries in this dataset were sampled between 1 March, 2006 and 31 May, 2006
+        if make_dict:
+            print("INFO -- Generating vocabulary during processing")
+
+            # The queries in this dataset were sampled between 1 March, 2006 and 31 May, 2006
         # (1) BACKGROUND set
         # those submitted before 1 May, 2006 as our background data to estimate the proposed model
         # and the baselines.
@@ -301,9 +382,12 @@ class Processor:
                             if tidy != '':
                                 query_words = self.tokenize_w_nltk(tidy)
                                 query_words = self.remove_short_words(query_words, min_length=2)
+
                             else:
                                 # after pre processing nothing left of query, register that query is useless
+                                # and session can't be used
                                 queries_unusable += 1
+                                sess_unusable = True
 
                         else:
                             # test purposes, just don't process the hole shit load, break after num of records
@@ -324,7 +408,8 @@ class Processor:
                                     if self.background_dt > last_query_activity_dttm:
                                         # first add query words to vocab
                                         if self.make_dict:
-                                            self.query_vocab.append(",".join(query_words))
+                                            self.query_vocab.extend(query_words)
+                                        # print(session_list)
                                         bg_sess.write("\t".join(session_list) + "\n")
                                         bg_rnk.write("\t".join(rank_list) + "\n")
                                     elif self.training_dt > last_query_activity_dttm:
@@ -350,7 +435,8 @@ class Processor:
                             # reset our session unusable indicator
                             sess_unusable = False
                         # append query to user session (eventually new) if it contains more than one word
-                        if len(query_words):
+
+                        if len(query_words) and not ("www" in query_words or "com" in query_words):
                             session_list.append(" ".join(query_words))
                             rank_list.append(ItemRank)
                         else:
@@ -374,7 +460,7 @@ class Processor:
             print("INFO - ==>> final # of sessions %d" % (session_id - sessions_skipped))
             print("INFO - total queries used %d, unusable after preprocessing %d" % (total_queries, queries_unusable))
             print("INFO - sessions where last 2 queries are identical %d" % last_2_identical)
-            print("INFO - total sessions skipped %d" % last_2_identical)
+            print("INFO - total sessions skipped %d" % sessions_skipped)
             # write last session to file
             # I know this is ugly, but not in the mood to make a method out of this pile of files
             if len(session_list) >= self.min_session_length:
@@ -385,7 +471,7 @@ class Processor:
                     if self.background_dt > last_query_activity_dttm:
                         # first add query words to vocab
                         if self.make_dict:
-                            self.query_vocab.append(",".join(query_words))
+                            self.query_vocab.extend(query_words)
                         bg_sess.write("\t".join(session_list) + "\n")
                         bg_rnk.write("\t".join(rank_list) + "\n")
                     elif self.training_dt > last_query_activity_dttm:
@@ -430,57 +516,77 @@ class Processor:
         #       test = test
         self.chgcwd_to_data_dir()
         self.vocab = load_vocab(self.vocab_file)
-
+        print(len(self.vocab))
+        t = 0
+        for key, value in self.vocab.iteritems():
+            print key, " / ", value
+            t += 1
+            if t > 6:
+                break
         if final_proc_options is not None:
             if not os.path.isdir(final_out_dir):
                 os.mkdir(final_out_dir)
             file_ext = ".out"
-            for opt in final_proc_options:
-                files_to_process = glob.glob(opt + "*.ctx")
-                for filename in tqdm.tqdm(files_to_process):
-                    query_c = 0
-                    logger.info("processing input filename %s" % filename)
-                    with open(filename, 'r') as f:
-                        outfile = os.path.join(final_out_dir, os.path.splitext(filename)[0] + file_ext)
-                        logger.info("Sending output to %s" % outfile)
-                        with open(outfile, 'w') as f_out:
-                            session_c = 0
-                            for line in f:
-                                query_c += 1
-                                queries = line.split('\t')
-                                session_list = []
-                                for query in queries:
-                                    session_list.append(self.word_to_seq(query))
+            outfile = os.path.join(final_out_dir, "aol_sess_windices" + file_ext)
 
-                                f_out.write("\t".join(session_list) + "\n")
-                                session_c += 1
+            with open(outfile, 'w') as f_out:
+                logger.info("Sending output to %s" % outfile)
+                session_c = 0
+                for opt in final_proc_options:
+                    files_to_process = glob.glob(opt + "*.ctx")
+                    for filename in tqdm.tqdm(files_to_process):
+                        query_c = 0
+                        logger.info("processing input filename %s" % filename)
+                        with open(filename, 'r') as f:
+                                for line in f:
+                                    query_c += 1
+                                    queries = line.split('\t')
+                                    session_list = []
+                                    for query in queries:
+                                        session_list.append(self.word_to_seq(query))
 
-                        # notice the statistics at the end of each file
-                        logger.info("INFO - Converted %d sessions" % session_c)
+                                    f_out.write("\t".join(session_list) + "\n")
+                                    session_c += 1
+
+                # notice the statistics at the end of each file
+                logger.info("INFO - Converted %d sessions" % session_c)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", type=str, default=AOL_ROOT_PATH,
                         help="Prefix (*.ses, *.rnk) to separated session/rank file")
-    parser.add_argument("--cutoff", type=int, default=-1,
+    parser.add_argument("--cutoff", type=int, default=90000,
                         help="Vocabulary pruning option i.e. 90k words, default is None")
     parser.add_argument("--min_freq", type=int, default=1,
                         help="Min frequency cutoff (optional)")
     parser.add_argument("--vocab_file", type=str, default=VOCAB_FILENAME,
                         help="External dictionary (pkl file)")
     parser.add_argument("--output", type=str, help="Output file")
-    parser.add_argument("--make_vocab", type=bool, default=False, help="Boolean whether or not to generate vocabulary")
+    parser.add_argument("--make_vocab", action='store_true', help="Boolean whether or not to generate vocabulary")
+
     args = parser.parse_args()
 
-    p = Processor(args.input_dir, num_of_recs=None, vocab_file=args.vocab_file,
-                  file_to_process=None, vocab_threshold=args.cutoff, make_dict=args.make_vocab)
+    vocab_file = os.path.join(DEFAULT_OUT_PATH, 'aol_vocab_2500.pkl')
+    p = Processor(args.input_dir, num_of_recs=None, vocab_file=vocab_file,
+                 file_to_process=None, vocab_threshold=2500, make_dict=True)
 
     # generates the 4 session files (and corresponding rank file) for background, train, test, validation
-    p.execute()
+    # p.execute()
     # p.load_bg_session(DEFAULT_OUT_PATH + "bg_session.ctx")
     # vocab = load_vocab(os.path.join(DEFAULT_OUT_PATH, args.vocab_file))
+    # vocab = load_vocab_without_freq(vocab_file)
+    # c = 0
+    # print("Length vocab %d" % len(vocab))
+    # for keys, values in vocab.iteritems():
+    #    c += 1
+    #    print keys
+    #    print values
+    #   if c > 10:
+    #        break
+    # make_a_new_vocab(os.path.join(DEFAULT_OUT_PATH, args.vocab_file), 2500)
     # p.translate_words_to_indices(final_proc_options=['bg', 'tr', 'val', 'test'])
 
+    # generate_dict_and_translate(os.path.join(DEFAULT_OUT_PATH, 'bg_session.ctx'))
 
 
 
