@@ -1,9 +1,7 @@
 import tensorflow as tf
 import numpy as np
-from tensorflow.contrib.layers.python.layers import initializers
 
 import layers
-import read_data
 
 
 class HRED():
@@ -20,15 +18,21 @@ class HRED():
     def __init__(self):
         # We do not need to define parameters explicitly since tf.get_variable() also creates parameters for us
 
-        self.vocab_size = 50004
-        self.embedding_size = 256
-        self.query_hidden_size = 512
-        self.session_hidden_size = 1024
+        # self.vocab_size = 50004
+        self.embedding_size = 128
+        self.query_hidden_size = 256
+        self.session_hidden_size = 512
+
+        self.vocab_size = 2504
+        # self.embedding_size = 15
+        # self.query_hidden_size = 30
+        # self.session_hidden_size = 80
+
         self.decoder_hidden_size = self.query_hidden_size
         self.output_hidden_size = self.embedding_size
         self.eoq_symbol = 1  # End of Query symbol
         self.eos_symbol = 2  # End of Session symbol
-        self.seq_len = 50  # this should be set at each batch iteration
+        self.unk_symbol = 0
 
         self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
         self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
@@ -144,10 +148,9 @@ class HRED():
                 x,
                 x_dim=self.embedding_size,
                 h_dim=self.decoder_hidden_size,
-                s_dim=self.session_hidden_size,
                 y_dim=self.output_hidden_size
             ),
-            (decoder, embedder, session_encoder),
+            (decoder, embedder),
             initializer=start_output
         )
 
@@ -299,15 +302,92 @@ class HRED():
 
         return loss
 
-    def accuracy(self, logits, labels):
+    def non_padding_accuracy(self, logits, labels):
+        """
+        Accuracy on non padding symbols
+        """
 
-        #eos_mask = tf.expand_dims(tf.cast(tf.not_equal(labels, self.eos_symbol), tf.float32), 2)
+        correct_prediction = tf.reduce_sum(
+            tf.cast(
+                tf.logical_and(
+                    tf.equal(
+                        np.argmax(self.softmax(logits)),
+                        labels
+                    ),
+                    tf.not_equal(
+                        tf.constant(self.eos_symbol, tf.int64),
+                        labels
+                    )
+                ),
+                tf.float32
+            )
+        )
 
-        labels = tf.cast(labels, tf.float32)
-        correct_prediction = tf.equal(tf.cast(np.argmax(self.softmax(logits)), tf.float32), labels)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-        return accuracy
+        not_padding_sum = tf.reduce_sum(
+            tf.cast(
+                tf.not_equal(
+                    tf.constant(self.eos_symbol, tf.int64),
+                    labels
+                ),
+                tf.float32
+            )
+        )
 
-    def set_seq_len(self, seq_len):
-        """ An Operation that takes one optimization step. """
-        self.seq_len = seq_len
+        return tf.div(correct_prediction, not_padding_sum)
+
+    def non_symbol_accuracy(self, logits, labels):
+        """
+        Accuracy without padding, unkown and end-of-query symbol
+        """
+
+        correct_prediction = tf.reduce_sum(
+            tf.cast(
+                tf.logical_and(
+                    tf.equal(
+                        np.argmax(self.softmax(logits)),
+                        labels
+                    ),
+                    tf.logical_and(
+                        tf.not_equal(
+                            tf.constant(self.eos_symbol, tf.int64),
+                            labels
+                        ),
+                        tf.logical_and(
+                            tf.not_equal(
+                                tf.constant(self.eoq_symbol, tf.int64),
+                                labels
+                            ),
+                            tf.not_equal(
+                                tf.constant(self.unk_symbol, tf.int64),
+                                labels
+                            )
+                        )
+                    )
+                ),
+                tf.float32
+            )
+        )
+
+        not_symbol_sum = tf.reduce_sum(
+            tf.cast(
+                tf.logical_and(
+                    tf.logical_and(
+                        tf.not_equal(
+                            tf.constant(self.eos_symbol, tf.int64),
+                            labels
+                        ),
+                        tf.not_equal(
+                            tf.constant(self.eoq_symbol, tf.int64),
+                            labels
+                        )
+                    ),
+                    tf.not_equal(
+                        tf.constant(self.unk_symbol, tf.int64),
+                        labels
+                    )
+                ),
+                tf.float32
+            )
+        )
+
+        return tf.div(correct_prediction, not_symbol_sum)

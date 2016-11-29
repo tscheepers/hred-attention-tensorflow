@@ -20,8 +20,8 @@ if __name__ == '__main__':
         batch_size = None
         max_length = None
 
-        X = tf.placeholder(tf.int32, shape=(max_length, batch_size))
-        X_beam = tf.placeholder(tf.int32, shape=(batch_size, ))
+        X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
+        X_beam = tf.placeholder(tf.int64, shape=(batch_size, ))
         H_query = tf.placeholder(tf.float32, shape=(batch_size, hred.query_hidden_size))
         H_session = tf.placeholder(tf.float32, shape=(batch_size, hred.session_hidden_size))
         H_decoder = tf.placeholder(tf.float32, shape=(batch_size, hred.decoder_hidden_size))

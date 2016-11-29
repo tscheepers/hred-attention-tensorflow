@@ -16,9 +16,9 @@ VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_train.out'
 
-CHECKPOINT_FILE = '../../checkpoints/model-50000.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model.ckpt'
 
-DATA_FILE = TRAIN_FILE # TRAIN_FILE
+DATA_FILE = SMALL_FILE # TRAIN_FILE
 
 if __name__ == '__main__':
 
@@ -28,15 +28,17 @@ if __name__ == '__main__':
         batch_size = None
         max_length = None
 
-        X = tf.placeholder(tf.int32, shape=(max_length, batch_size))
-        Y = tf.placeholder(tf.int32, shape=(max_length, batch_size))
+        X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
+        Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
 
         logits = hred.step_through_session(X)
         loss = hred.loss(X, logits, Y)
         softmax = hred.softmax(logits)
-        accuracy = hred.accuracy(logits, Y)
+        accuracy = hred.non_padding_accuracy(logits, Y)
+        non_symbol_accuracy = hred.non_symbol_accuracy(logits, Y)
 
-        optimizer = Optimizer(loss, learning_rate=0.0002, max_global_norm=1.0)
+        optimizer = Optimizer(loss, initial_learning_rate=0.0002, num_steps_per_decay=1000,
+                      decay_rate=0.5, max_global_norm=1.0)
 
         # Add an op to initialize the variables.
         init_op = tf.initialize_all_variables()
@@ -50,8 +52,8 @@ if __name__ == '__main__':
 
             # summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
 
-            batch_size = 80
-            max_length = 50
+            batch_size = 100
+            max_length = 20
             max_iterations = 1
             max_epochs = 1000
             iteration = 0
@@ -70,8 +72,8 @@ if __name__ == '__main__':
                     # print "y", y_batch
                     # print "seq len", seq_len
 
-                    loss_out, _, softmax_out, acc_out = sess.run(
-                        [loss, optimizer.optimize_op, softmax, accuracy],
+                    loss_out, _, softmax_out, acc_out, accuracy_non_special_symbols_out = sess.run(
+                        [loss, optimizer.optimize_op, softmax, accuracy, non_symbol_accuracy],
                         hred.populate_feed_dict_with_defaults(
                             batch_size=batch_size,
                             feed_dict={X: x_batch, Y: y_batch}
@@ -79,12 +81,11 @@ if __name__ == '__main__':
                     )
 
                     if iteration % 10 == 0:
-                        print("Loss %d: %f" % (iteration, loss_out))
-                        print("Acc %d: %f" % (iteration, acc_out))
+                        print("Step %d - Loss: %f   Acc: %f   Acc (no symbols): %f" % (iteration, loss_out, acc_out, accuracy_non_special_symbols_out))
 
-                    if iteration % 100 == 0:
-                        print("Input", x_batch)
-                        print("Softmax", np.argmax(softmax_out, axis=2))
+                    if iteration % 1000 == 0:
+                        # print("Input", x_batch)
+                        # print("Softmax", np.argmax(softmax_out, axis=2))
 
                         if not math.isnan(loss_out):
                             # Save the variables to disk.
