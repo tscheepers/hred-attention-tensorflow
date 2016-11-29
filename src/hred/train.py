@@ -21,7 +21,20 @@ CHECKPOINT_FILE = '../../checkpoints/model-1.ckpt'
 
 DATA_FILE = TRAIN_FILE
 
+def load_vocab(vocab_file):
+    assert os.path.isfile(vocab_file)
+    vocab = dict([(x[0], x[1]) for x in cPickle.load(open(vocab_file, "r"))])
+    # Check consistency
+    assert '<unk>' in vocab
+    assert '</s>' in vocab
+    assert '</q>' in vocab
+    assert '</p>' in vocab
+    logger.info("INFO - Successfully loaded vocabulary dictionary %s." % vocab_file)
+    logger.info("INFO - Vocabulary contains %d words" % len(vocab))
+    return vocab
+
 if __name__ == '__main__':
+
 
     with tf.Graph().as_default():
 
