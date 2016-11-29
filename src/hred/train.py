@@ -15,6 +15,7 @@ TRAIN_FILE = '../../data/aol_sess_50000.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 SMALL_FILE = '../../data/small_train.out'
+TRAIN_DIR = 'logs'
 
 CHECKPOINT_FILE = '../../checkpoints/model-1.ckpt'
 
@@ -47,19 +48,22 @@ if __name__ == '__main__':
         step_inference = hred.single_step(X_beam, H_query, H_session, H_decoder, reuse=True)
 
         optimizer = Optimizer(loss, initial_learning_rate=0.0002, num_steps_per_decay=10000,
-                      decay_rate=0.5, max_global_norm=1.0)
+                              decay_rate=0.5, max_global_norm=1.0)
+
+        summary = tf.merge_all_summaries()
 
         # Add an op to initialize the variables.
         init_op = tf.initialize_all_variables()
 
         # Add ops to save and restore all the variables.
+
         saver = tf.train.Saver()
 
         with tf.Session() as sess:
 
             sess.run(init_op)
+            summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
 
-            # summary_writer = tf.train.SummaryWriter('logs/graph', sess.graph)
 
             batch_size = 80
             max_length = 50
@@ -88,6 +92,13 @@ if __name__ == '__main__':
                         )
                     )
 
+                    summary_str = sess.run(summary, hred.populate_feed_dict_with_defaults(
+                        batch_size=batch_size,
+                        feed_dict={X: x_batch, Y: y_batch}
+                    ))
+                    summary_writer.add_summary(summary_str, iteration)
+                    summary_writer.flush()
+
                     # Accumulative cost, like in hred-qs
                     total_loss += loss_out
                     n_pred += seq_len * batch_size
@@ -101,6 +112,7 @@ if __name__ == '__main__':
                         if not math.isnan(loss_out):
                             # Save the variables to disk.
                             save_path = saver.save(sess, CHECKPOINT_FILE)
+
                             print("Model saved in file: %s" % save_path)
 
                             read_data.read_batch(

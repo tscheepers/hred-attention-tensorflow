@@ -305,6 +305,7 @@ class HRED():
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
         )
 
+        tf.scalar_summary("loss", loss)
         return loss
 
     def non_padding_accuracy(self, logits, labels):
@@ -338,7 +339,9 @@ class HRED():
             )
         )
 
-        return tf.div(correct_prediction, not_padding_sum)
+        non_padding_acc = tf.div(correct_prediction, not_padding_sum)
+        tf.scalar_summary("non-padding-acc", non_padding_acc)
+        return non_padding_acc
 
     def non_symbol_accuracy(self, logits, labels):
         """
@@ -395,4 +398,7 @@ class HRED():
             )
         )
 
-        return tf.div(correct_prediction, not_symbol_sum)
+        non_symbol_acc = tf.div(correct_prediction, not_symbol_sum)
+        tf.scalar_summary("non-symbol-acc", non_symbol_acc)
+
+        return non_symbol_acc
