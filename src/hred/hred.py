@@ -18,12 +18,12 @@ class HRED():
     def __init__(self):
         # We do not need to define parameters explicitly since tf.get_variable() also creates parameters for us
 
-        # self.vocab_size = 50004
-        self.embedding_size = 128
-        self.query_hidden_size = 256
-        self.session_hidden_size = 512
+        self.vocab_size = 50004
+        self.embedding_size = 300
+        self.query_hidden_size = 1000
+        self.session_hidden_size = 1500
 
-        self.vocab_size = 2504
+        # self.vocab_size = 2504
         # self.embedding_size = 15
         # self.query_hidden_size = 30
         # self.session_hidden_size = 80
@@ -295,7 +295,8 @@ class HRED():
         # logits -= np.max(logits)
 
         # loss = -tf.reduce_sum(labels * tf.log(logits))
-        loss = tf.reduce_mean(
+
+        loss = tf.reduce_sum(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
         )
 
