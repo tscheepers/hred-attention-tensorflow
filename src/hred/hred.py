@@ -173,7 +173,7 @@ class HRED():
             initializer=start_logits
         )
 
-        # If we want the softmax back from this step or just the logits for the loss function
+        # If we want the softmax back from this step or just the logits f or the loss function
         if return_softmax:
             output = self.softmax(logits)
         else:

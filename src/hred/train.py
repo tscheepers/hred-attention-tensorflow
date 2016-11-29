@@ -140,11 +140,14 @@ if __name__ == '__main__':
                             max_i = 30
 
                             while x != hred.eos_symbol and i < max_i:
+
                                 softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                                     step_inference,
                                     {X_beam: x, H_query: hidden_query, H_session: hidden_session, H_decoder: hidden_decoder}
                                 )
-                                result += [np.argmax(softmax_out, axis=1)]
+
+                                x = np.argmax(softmax_out, axis=1)
+                                result += [x]
                                 i += 1
 
                             input_x = np.array(input_x).flatten()
