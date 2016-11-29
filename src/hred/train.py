@@ -11,6 +11,11 @@ from hred import HRED
 from optimizer import Optimizer
 import read_data
 import math
+import cPickle as pickle
+import os
+import logging as logger
+
+VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 
 TRAIN_FILE = '../../data/aol_sess_50000.out'
 VALIDATION_FILE = '../../data/val_session.out'
@@ -20,12 +25,13 @@ TRAIN_DIR = 'logs'
 
 CHECKPOINT_FILE = '../../checkpoints/model-1.ckpt'
 
-DATA_FILE = TRAIN_FILE
+DATA_FILE = SMALL_FILE# TRAIN_FILE
 SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
+
 
 def load_vocab(vocab_file):
     assert os.path.isfile(vocab_file)
-    vocab = dict([(x[0], x[1]) for x in cPickle.load(open(vocab_file, "r"))])
+    vocab = dict([(x[0], x[1]) for x in pickle.load(open(vocab_file, "r"))])
     # Check consistency
     assert '<unk>' in vocab
     assert '</s>' in vocab
@@ -36,6 +42,10 @@ def load_vocab(vocab_file):
     return vocab
 
 if __name__ == '__main__':
+
+    vocab_shifted = load_vocab(VOCAB_FILE)
+    vocab = dict((v,k) for k,v in vocab_shifted.iteritems())
+
 
 
     with tf.Graph().as_default():
@@ -167,7 +177,11 @@ if __name__ == '__main__':
                             input_x = np.array(input_x).flatten()
                             result = np.array(result).flatten()
 
+                            result_words = [vocab.get(x, "NOT IN VOCAB") for x in result]
+                            # print result_words
+
                             print('Sample input: %s' % (' '.join(map(str, input_x)),))
                             print('Sample output: %s' % (' '.join(map(str, result)),))
+                            print('Sample output words: %s' % (' '.join(result_words)))
 
                     iteration += 1
