@@ -241,10 +241,9 @@ class HRED():
 
         # After the decoder we add an additional output layer
         output = layers.output_layer(
-            (decoder, embedder, session_encoder),
+            (decoder, embedder),
             x_dim=self.embedding_size,
             h_dim=self.decoder_hidden_size,
-            s_dim=self.session_hidden_size,
             y_dim=self.output_hidden_size,
             reuse=True
         )

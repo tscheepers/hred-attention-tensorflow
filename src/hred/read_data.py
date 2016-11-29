@@ -21,16 +21,17 @@ def read_batch(data_file, batch_size=80, eoq_symbol=1, pad_symbol=2, max_seq_len
         batch[1].append(y)
 
 
-def read_line(data_file, eoq_symbol=1):
+def read_line(data_file, eoq_symbol=1, eos_symbol=2, sos_symbol=3):
     with open(data_file, 'r') as df:
         for line in df:
 
             # first replace tab with eoq symbol, never predict eos_symbol
-            x = [int(i) for i in line.strip().replace('\t', ' %d ' % eoq_symbol).split()]
-            y = x[1:] + [eoq_symbol]
+            # x = [int(i) for i in line.strip().replace('\t', ' %d ' % eoq_symbol).split()]
+            # y = x[1:] + [eoq_symbol]
 
-            # input = [int(x) for x in line.strip().replace('\t', ' %d ' % eoq_symbol).split()] + [eoq_symbol]
-            # label = input[1:] + [eos_symbol]
+            x = [sos_symbol] + [int(i) for i in line.strip().replace('\t', ' %d ' % eoq_symbol).split()] + [eoq_symbol]
+            y = x[1:] + [eos_symbol]
+
             yield x, y
 
 
