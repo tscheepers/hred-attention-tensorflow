@@ -57,7 +57,8 @@ class HRED():
         return feed_dict
 
     def step_through_session(self, X, start_hidden_query=None, start_hidden_session=None, start_hidden_decoder=None,
-                      start_output=None, start_logits=None, return_last_with_hidden_states=False, return_softmax=False):
+                      start_output=None, start_logits=None, return_last_with_hidden_states=False, return_softmax=False,
+                      reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
@@ -83,7 +84,7 @@ class HRED():
         # X = tf.Print(X, [X[:, 0]], message="This is X: ", summarize=20)
 
         # Making embeddings for x
-        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size)
+        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size, reuse=reuse)
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
@@ -100,7 +101,8 @@ class HRED():
                 x,
                 name='query_encoder',
                 x_dim=self.embedding_size,
-                y_dim=self.query_hidden_size
+                y_dim=self.query_hidden_size,
+                reuse=reuse
             ),
             (embedder, eoq_mask),  # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_query
@@ -116,7 +118,8 @@ class HRED():
                 x,
                 name='session_encoder',
                 x_dim=self.query_hidden_size,
-                y_dim=self.session_hidden_size
+                y_dim=self.session_hidden_size,
+                reuse=reuse
             ),
             (query_encoder, eoq_mask),
             initializer=start_hidden_session
@@ -134,7 +137,8 @@ class HRED():
                 name='decoder',
                 x_dim=self.embedding_size,
                 h_dim=self.session_hidden_size,
-                y_dim=self.decoder_hidden_size
+                y_dim=self.decoder_hidden_size,
+                reuse=reuse
             ),
             (embedder, eoq_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_decoder
@@ -148,7 +152,8 @@ class HRED():
                 x,
                 x_dim=self.embedding_size,
                 h_dim=self.decoder_hidden_size,
-                y_dim=self.output_hidden_size
+                y_dim=self.output_hidden_size,
+                reuse=reuse
             ),
             (decoder, embedder),
             initializer=start_output
@@ -161,13 +166,14 @@ class HRED():
             lambda _, x: layers.logits_layer(
                 x,
                 x_dim=self.output_hidden_size,
-                y_dim=self.vocab_size
+                y_dim=self.vocab_size,
+                reuse=reuse
             ),
             output_layer,
             initializer=start_logits
         )
 
-        # If we want the softmax back from this step or just the logits for the loss function
+        # If we want the softmax back from this step or just the logits f or the loss function
         if return_softmax:
             output = self.softmax(logits)
         else:
@@ -175,13 +181,12 @@ class HRED():
 
         # If we want to continue decoding with single_step we need the hidden states of all GRU layers
         if return_last_with_hidden_states:
-            # hidden_decoder = decoder  # there is no resetted decoder output
-            # return output[-1, :, :], hidden_query[-1, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
-            return None
+            hidden_decoder = decoder  # there is no resetted decoder output
+            return output[-1, :, :], hidden_query[-1, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
         else:
             return output
 
-    def single_step(self, X, prev_hidden_query, prev_hidden_session, prev_hidden_decoder):
+    def single_step(self, X, prev_hidden_query, prev_hidden_session, prev_hidden_decoder, reuse=True):
         """
         Performs a step in the HRED X can be a 2-D tensor (batch, vocab), this can be used
         for beam search
@@ -198,7 +203,7 @@ class HRED():
         """
 
         # Making embeddings for x
-        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size, reuse=True)
+        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size, reuse=reuse)
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
@@ -210,7 +215,7 @@ class HRED():
             name='query_encoder',
             x_dim=self.embedding_size,
             y_dim=self.query_hidden_size,
-            reuse=True
+            reuse=reuse
         ))
 
         # This part does the same, yet for the session encoder. Here we need to have the possibility to keep the current
@@ -221,7 +226,7 @@ class HRED():
             name='session_encoder',
             x_dim=self.query_hidden_size,
             y_dim=self.session_hidden_size,
-            reuse=True
+            reuse=reuse
         ))
 
         # This part makes the decoder for a step. The decoder uses both the word embeddings, the reset/retain vector
@@ -234,7 +239,7 @@ class HRED():
             x_dim=self.embedding_size,
             h_dim=self.session_hidden_size,
             y_dim=self.decoder_hidden_size,
-            reuse=True
+            reuse=reuse
         )
 
         decoder = hidden_decoder
@@ -245,7 +250,7 @@ class HRED():
             x_dim=self.embedding_size,
             h_dim=self.decoder_hidden_size,
             y_dim=self.output_hidden_size,
-            reuse=True
+            reuse=reuse
         )
 
         # We compute the output logits based on the output layer above
@@ -253,7 +258,7 @@ class HRED():
             output,
             x_dim=self.output_hidden_size,
             y_dim=self.vocab_size,
-            reuse=True
+            reuse=reuse
         )
 
         softmax = self.softmax(logits)
