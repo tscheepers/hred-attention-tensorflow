@@ -3,8 +3,8 @@ import tensorflow as tf
 
 class Optimizer(object):
 
-    def __init__(self, loss, initial_learning_rate, num_steps_per_decay,
-                 decay_rate, max_global_norm=1.0):
+    def __init__(self, loss, initial_learning_rate=0.0002, num_steps_per_decay=10000,
+                          decay_rate=0.5, max_global_norm=1.0):
         """ Create a simple optimizer.
 
         This optimizer clips gradients and uses vanilla stochastic gradient

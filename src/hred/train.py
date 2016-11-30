@@ -11,114 +11,101 @@ from hred import HRED
 from optimizer import Optimizer
 import read_data
 import math
-import cPickle as pickle
-import os
-import logging as logger
 
-VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
-
-TRAIN_FILE = '../../data/aol_sess_50000.out'
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
-SMALL_FILE = '../../data/small_train.out'
 TRAIN_DIR = 'logs'
 
-CHECKPOINT_FILE = '../../checkpoints/model-1.ckpt'
+# CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
+# VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
+# TRAIN_FILE = '../../data/aol_sess_50000.out'
+# SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
+# VOCAB_SIZE = 50004
+# EMBEDDING_DIM = 300
+# QUERY_DIM = 1000
+# SESSION_DIM = 1500
+# BATCH_SIZE = 80
+# MAX_LENGTH = 50
 
-DATA_FILE = SMALL_FILE# TRAIN_FILE
-SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-
-
-def load_vocab(vocab_file):
-    assert os.path.isfile(vocab_file)
-    vocab = dict([(x[0], x[1]) for x in pickle.load(open(vocab_file, "r"))])
-    # Check consistency
-    assert '<unk>' in vocab
-    assert '</s>' in vocab
-    assert '</q>' in vocab
-    assert '</p>' in vocab
-    logger.info("INFO - Successfully loaded vocabulary dictionary %s." % vocab_file)
-    logger.info("INFO - Vocabulary contains %d words" % len(vocab))
-    return vocab
-
-if __name__ == '__main__':
-
-    vocab_shifted = load_vocab(VOCAB_FILE)
-    vocab = dict((v,k) for k,v in vocab_shifted.iteritems())
-
+CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
+VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
+TRAIN_FILE = '../../data/small_train.out'
+SAMPLE_FILE = '../../data/sample_small_train.out'
+VOCAB_SIZE = 2504
+EMBEDDING_DIM = 10
+QUERY_DIM = 15
+SESSION_DIM = 20
+BATCH_SIZE = 80
+MAX_LENGTH = 50
 
 
-    with tf.Graph().as_default():
+class Trainer(object):
 
-        hred = HRED()
+    def __init__(self):
+        self.vocab_lookup_dict = read_data.read_vocab_lookup(VOCAB_FILE)
+        self.hred = HRED(vocab_size=VOCAB_SIZE, embedding_dim=EMBEDDING_DIM, query_dim=QUERY_DIM,
+                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=VOCAB_SIZE)
+
         batch_size = None
         max_length = None
 
-        X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
-        Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
+        self.X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
+        self.Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
 
-        X_beam = tf.placeholder(tf.int64, shape=(batch_size,))
-        H_query = tf.placeholder(tf.float32, shape=(batch_size, hred.query_hidden_size))
-        H_session = tf.placeholder(tf.float32, shape=(batch_size, hred.session_hidden_size))
-        H_decoder = tf.placeholder(tf.float32, shape=(batch_size, hred.decoder_hidden_size))
+        self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
+        self.H_query = tf.placeholder(tf.float32, shape=(batch_size, self.hred.query_dim))
+        self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
+        self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
 
-        logits = hred.step_through_session(X)
-        loss = hred.loss(X, logits, Y)
-        softmax = hred.softmax(logits)
-        accuracy = hred.non_padding_accuracy(logits, Y)
-        non_symbol_accuracy = hred.non_symbol_accuracy(logits, Y)
+        self.logits = self.hred.step_through_session(self.X)
+        self.loss = self.hred.loss(self.X, self.logits, self.Y)
+        self.softmax = self.hred.softmax(self.logits)
+        self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
+        self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
-        session_inference = hred.step_through_session(X, return_softmax=True, return_last_with_hidden_states=True, reuse=True)
-        step_inference = hred.single_step(X_beam, H_query, H_session, H_decoder, reuse=True)
+        self.session_inference = self.hred.step_through_session(self.X, return_softmax=True,
+                                                                return_last_with_hidden_states=True, reuse=True)
+        self.step_inference = self.hred.single_step(self.X_sample, self.H_query, self.H_session, self.H_decoder,
+                                                    reuse=True)
 
-        optimizer = Optimizer(loss, initial_learning_rate=0.0002, num_steps_per_decay=10000,
-                              decay_rate=0.5, max_global_norm=1.0)
+        self.optimizer = Optimizer(self.loss)
+        self.summary = tf.merge_all_summaries()
 
-        summary = tf.merge_all_summaries()
+        # Add ops to save and restore all the variables.
+        self.saver = tf.train.Saver()
+
+    def train(self, max_epochs=1000, max_length=50, batch_size=80):
 
         # Add an op to initialize the variables.
         init_op = tf.initialize_all_variables()
 
-        # Add ops to save and restore all the variables.
+        with tf.Session() as tf_sess:
 
-        saver = tf.train.Saver()
+            tf_sess.run(init_op)
+            summary_writer = tf.train.SummaryWriter(TRAIN_DIR, tf_sess.graph)
 
-        with tf.Session() as sess:
-
-            sess.run(init_op)
-            summary_writer = tf.train.SummaryWriter(TRAIN_DIR, sess.graph)
-
-
-            batch_size = 80
-            max_length = 50
-            max_iterations = 1
-            max_epochs = 1000
             iteration = 0
-
             total_loss = 0.0
             n_pred = 0.0
 
             for epoch in range(max_epochs):
 
                 for ((x_batch, y_batch), seq_len) in read_data.read_batch(
-                        DATA_FILE,
-                        batch_size=batch_size,
-                        max_seq_len=max_length
+                        TRAIN_FILE, batch_size=batch_size, max_seq_len=max_length
                 ):
                     x_batch = np.transpose(np.asarray(x_batch))
                     y_batch = np.transpose(np.asarray(y_batch))
 
-                    loss_out, _, softmax_out, acc_out, accuracy_non_special_symbols_out = sess.run(
-                        [loss, optimizer.optimize_op, softmax, accuracy, non_symbol_accuracy],
-                        hred.populate_feed_dict_with_defaults(
-                            batch_size=batch_size,
-                            feed_dict={X: x_batch, Y: y_batch}
+                    loss_out, _, softmax_out, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
+                        [self.loss, self.optimizer.optimize_op, self.softmax, self.accuracy, self.non_symbol_accuracy],
+                        self.hred.populate_feed_dict_with_defaults(
+                            batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
                         )
                     )
 
-                    summary_str = sess.run(summary, hred.populate_feed_dict_with_defaults(
-                        batch_size=batch_size,
-                        feed_dict={X: x_batch, Y: y_batch}
+                    # Sumerize
+                    summary_str = tf_sess.run(self.summary, self.hred.populate_feed_dict_with_defaults(
+                        batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
                     ))
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
@@ -132,56 +119,57 @@ if __name__ == '__main__':
                           (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out))
 
                     if iteration % 100 == 0:
-
-                        if not math.isnan(loss_out):
-                            # Save the variables to disk.
-                            save_path = saver.save(sess, CHECKPOINT_FILE)
-
-                            print("Model saved in file: %s" % save_path)
-
-                            read_data.read_batch(
-                                DATA_FILE,
-                                batch_size=batch_size,
-                                max_seq_len=max_length
-                            )
-
-                        for (x, _) in read_data.read_line(SAMPLE_FILE):
-
-                            input_x = np.expand_dims(np.asarray(x), 1)
-
-                            softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
-                                session_inference,
-                                hred.populate_feed_dict_with_defaults(
-                                     batch_size=1,
-                                     feed_dict={X: input_x}
-                                )
-                            )
-
-                            x = np.argmax(softmax_out, axis=1)
-                            result = [x]
-
-                            i = 0
-                            max_i = 30
-
-                            while x != hred.eos_symbol and i < max_i:
-
-                                softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
-                                    step_inference,
-                                    {X_beam: x, H_query: hidden_query, H_session: hidden_session, H_decoder: hidden_decoder}
-                                )
-
-                                x = np.argmax(softmax_out, axis=1)
-                                result += [x]
-                                i += 1
-
-                            input_x = np.array(input_x).flatten()
-                            result = np.array(result).flatten()
-
-                            result_words = [vocab.get(x, "NOT IN VOCAB") for x in result]
-                            # print result_words
-
-                            print('Sample input: %s' % (' '.join(map(str, input_x)),))
-                            print('Sample output: %s' % (' '.join(map(str, result)),))
-                            print('Sample output words: %s' % (' '.join(result_words)))
+                        self.save_model(tf_sess, loss_out)
+                        self.sample(tf_sess)
 
                     iteration += 1
+
+    def sample(self, sess, max_sample_length=30):
+
+        for (x, _) in read_data.read_line(SAMPLE_FILE):
+
+            input_x = np.expand_dims(np.asarray(x), 1)
+
+            softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
+                self.session_inference,
+                self.hred.populate_feed_dict_with_defaults(
+                    batch_size=1, feed_dict={self.X: input_x}
+                )
+            )
+
+            x = np.argmax(softmax_out, axis=1)
+            result = [x]
+            i = 0
+
+            while x != self.hred.eos_symbol and i < max_sample_length:
+                softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
+                    self.step_inference,
+                    {self.X_sample: x, self.H_query: hidden_query, self.H_session: hidden_session,
+                     self.H_decoder: hidden_decoder}
+                )
+
+                x = np.argmax(softmax_out, axis=1)
+                result += [x]
+                i += 1
+
+            input_x = np.array(input_x).flatten()
+            result = np.array(result).flatten()
+
+            result_words = [self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in result]
+            # print result_words
+
+            print('Sample input: %s' % (' '.join(map(str, input_x)),))
+            print('Sample output: %s' % (' '.join(map(str, result)),))
+            print('Sample output words: %s' % (' '.join(result_words)))
+
+    def save_model(self, sess, loss_out):
+        if not math.isnan(loss_out):
+            # Save the variables to disk.
+            save_path = self.saver.save(sess, CHECKPOINT_FILE)
+            print("Model saved in file: %s" % save_path)
+
+
+if __name__ == '__main__':
+    with tf.Graph().as_default():
+        trainer = Trainer()
+        trainer.train(batch_size=BATCH_SIZE, max_length=MAX_LENGTH)

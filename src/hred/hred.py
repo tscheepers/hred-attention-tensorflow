@@ -329,7 +329,7 @@ class HRED():
 
         non_padding_acc = tf.div(correct_prediction, not_padding_sum)
         tf.scalar_summary("non-padding-acc", non_padding_acc)
-        
+
         return non_padding_acc
 
     def non_symbol_accuracy(self, logits, labels):

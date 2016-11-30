@@ -2,11 +2,9 @@ import tensorflow as tf
 import os
 import numpy as np
 import subprocess
-
-TRAIN_FILE = '../../data/tr_session.out'
-VALIDATION_FILE = '../../data/val_session.out'
-TEST_FILE = '../../data/test_session.out'
-SMALL_FILE = '../../data/small_test_session.out'
+import pickle
+import os
+import logging as logger
 
 
 def read_batch(data_file, batch_size=80, eoq_symbol=1, pad_symbol=2, max_seq_len=50):
@@ -66,3 +64,27 @@ def add_padding_and_sort(batch, eoq_symbol, pad_symbol, max_seq_len):
     sorted_batch = batch.sort(key=len)
     add_padding(sorted_batch, eoq_symbol, pad_symbol, max_seq_len)
 
+
+def read_vocab_lookup(vocab_file):
+    vocab_shifted = read_token_lookup(vocab_file)
+    return dict((v, k) for k, v in vocab_shifted.iteritems())
+
+
+def read_token_lookup(vocab_file):
+    assert os.path.isfile(vocab_file)
+    vocab = pickle.load(open(vocab_file, "r"))
+    # vocab = dict([(x[0], x[1]) for x in loaded_file])
+
+    # Check consistency
+    if '<unk>' not in vocab:
+        vocab['<unk>'] = 0
+    if '</q>' not in vocab:
+        vocab['</q>'] = 1
+    if '</s>' not in vocab:
+        vocab['</s>'] = 2
+    if '</p>' not in vocab:
+        vocab['</p>'] = 3
+
+    logger.info("INFO - Successfully loaded vocabulary dictionary %s." % vocab_file)
+    logger.info("INFO - Vocabulary contains %d words" % len(vocab))
+    return vocab
