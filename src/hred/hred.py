@@ -15,29 +15,24 @@ class HRED():
      the previous queries in the session.
     """
 
-    def __init__(self):
+    def __init__(self, vocab_size=50004, embedding_dim=300, query_dim=1000, session_dim=1500,
+                 decoder_dim=1000, output_dim=50004, unk_symbol=0, eoq_symbol=1, eos_symbol=2):
         # We do not need to define parameters explicitly since tf.get_variable() also creates parameters for us
 
-        self.vocab_size = 50004
-        self.embedding_size = 300
-        self.query_hidden_size = 1000
-        self.session_hidden_size = 1500
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.query_dim = query_dim
+        self.session_dim = session_dim
+        self.decoder_dim = decoder_dim
+        self.output_dim = output_dim
+        self.unk_symbol = unk_symbol  # Unknown symbol
+        self.eoq_symbol = eoq_symbol  # End of Query symbol
+        self.eos_symbol = eos_symbol  # End of Session symbol
 
-        # self.vocab_size = 2504
-        # self.embedding_size = 15
-        # self.query_hidden_size = 30
-        # self.session_hidden_size = 80
-
-        self.decoder_hidden_size = self.query_hidden_size
-        self.output_hidden_size = self.embedding_size
-        self.eoq_symbol = 1  # End of Query symbol
-        self.eos_symbol = 2  # End of Session symbol
-        self.unk_symbol = 0
-
-        self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_hidden_size))
-        self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_hidden_size))
-        self.start_hidden_decoder = tf.placeholder(tf.float32, (None, self.decoder_hidden_size))
-        self.start_output = tf.placeholder(tf.float32, (None, self.output_hidden_size))
+        self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_dim))
+        self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_dim))
+        self.start_hidden_decoder = tf.placeholder(tf.float32, (None, self.decoder_dim))
+        self.start_output = tf.placeholder(tf.float32, (None, self.output_dim))
         self.start_logits = tf.placeholder(tf.float32, (None, self.vocab_size))
 
     def populate_feed_dict_with_defaults(self, batch_size=1, feed_dict=None):
@@ -48,28 +43,29 @@ class HRED():
         if feed_dict is None:
             feed_dict = dict()
 
-        feed_dict[self.start_hidden_query] = np.zeros((2, batch_size, self.query_hidden_size))
-        feed_dict[self.start_hidden_session] = np.zeros((2, batch_size, self.session_hidden_size))
-        feed_dict[self.start_hidden_decoder] = np.zeros((batch_size, self.decoder_hidden_size))
-        feed_dict[self.start_output] = np.zeros((batch_size, self.output_hidden_size))
+        feed_dict[self.start_hidden_query] = np.zeros((2, batch_size, self.query_dim))
+        feed_dict[self.start_hidden_session] = np.zeros((2, batch_size, self.session_dim))
+        feed_dict[self.start_hidden_decoder] = np.zeros((batch_size, self.decoder_dim))
+        feed_dict[self.start_output] = np.zeros((batch_size, self.output_dim))
         feed_dict[self.start_logits] = np.zeros((batch_size, self.vocab_size))
 
         return feed_dict
 
     def step_through_session(self, X, start_hidden_query=None, start_hidden_session=None, start_hidden_decoder=None,
-                      start_output=None, start_logits=None, return_last_with_hidden_states=False, return_softmax=False,
-                      reuse=False):
+                             start_output=None, start_logits=None, return_last_with_hidden_states=False,
+                             return_softmax=False,
+                             reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
         :param X: The input sessions. Lists of ints, ints correspond to words
         Shape: (max_length x batch_size)
         :param start_hidden_query: The first hidden state of the query encoder. Initialized with zeros.
-        Shape: (2 x batch_size x query_hidden_size)
+        Shape: (2 x batch_size x query_dim)
         :param start_hidden_session: The first hidden state of the session encoder. Iniitalized with zeros.
-        Shape: (2 x batch_size x session_hidden_size)
+        Shape: (2 x batch_size x session_dim)
         :param start_hidden_decoder: The first hidden state of the decoder. Initialized with zeros.
-        Shape: (batch_size x output_hidden_size)
+        Shape: (batch_size x output_dim)
         :param start_output:
         :param start_logits:
         :return:
@@ -84,7 +80,7 @@ class HRED():
         # X = tf.Print(X, [X[:, 0]], message="This is X: ", summarize=20)
 
         # Making embeddings for x
-        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size, reuse=reuse)
+        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_dim, reuse=reuse)
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
@@ -100,8 +96,8 @@ class HRED():
                 result_prev[1],  # h_reset_prev
                 x,
                 name='query_encoder',
-                x_dim=self.embedding_size,
-                y_dim=self.query_hidden_size,
+                x_dim=self.embedding_dim,
+                y_dim=self.query_dim,
                 reuse=reuse
             ),
             (embedder, eoq_mask),  # scan does not accept multiple tensors so we need to pack and unpack
@@ -117,8 +113,8 @@ class HRED():
                 result_prev[1],  # h_retain_prev
                 x,
                 name='session_encoder',
-                x_dim=self.query_hidden_size,
-                y_dim=self.session_hidden_size,
+                x_dim=self.query_dim,
+                y_dim=self.session_dim,
                 reuse=reuse
             ),
             (query_encoder, eoq_mask),
@@ -135,12 +131,13 @@ class HRED():
                 result_prev,
                 x,
                 name='decoder',
-                x_dim=self.embedding_size,
-                h_dim=self.session_hidden_size,
-                y_dim=self.decoder_hidden_size,
+                x_dim=self.embedding_dim,
+                h_dim=self.session_dim,
+                y_dim=self.decoder_dim,
                 reuse=reuse
             ),
-            (embedder, eoq_mask, session_encoder),  # scan does not accept multiple tensors so we need to pack and unpack
+            (embedder, eoq_mask, session_encoder),
+            # scan does not accept multiple tensors so we need to pack and unpack
             initializer=start_hidden_decoder
         )
 
@@ -150,9 +147,9 @@ class HRED():
         output_layer = tf.scan(
             lambda _, x: layers.output_layer(
                 x,
-                x_dim=self.embedding_size,
-                h_dim=self.decoder_hidden_size,
-                y_dim=self.output_hidden_size,
+                x_dim=self.embedding_dim,
+                h_dim=self.decoder_dim,
+                y_dim=self.output_dim,
                 reuse=reuse
             ),
             (decoder, embedder),
@@ -165,7 +162,7 @@ class HRED():
         logits = tf.scan(
             lambda _, x: layers.logits_layer(
                 x,
-                x_dim=self.output_hidden_size,
+                x_dim=self.output_dim,
                 y_dim=self.vocab_size,
                 reuse=reuse
             ),
@@ -194,16 +191,16 @@ class HRED():
         :param X: The input sessions. Lists of ints, ints correspond to words
         Shape: (max_length)
         :param start_hidden_query: The first hidden state of the query encoder. Initialized with zeros.
-        Shape: (2 x query_hidden_size)
+        Shape: (2 x query_dim)
         :param start_hidden_session: The first hidden state of the session encoder. Iniitalized with zeros.
-        Shape: (2 x session_hidden_size)
+        Shape: (2 x session_dim)
         :param start_hidden_decoder: The first hidden state of the decoder. Initialized with zeros.
-        Shape: (output_hidden_size)
+        Shape: (output_dim)
         :return:
         """
 
         # Making embeddings for x
-        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_size, reuse=reuse)
+        embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_dim, reuse=reuse)
 
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
@@ -213,8 +210,8 @@ class HRED():
             prev_hidden_query,  # h_reset_prev
             (embedder, eoq_mask),
             name='query_encoder',
-            x_dim=self.embedding_size,
-            y_dim=self.query_hidden_size,
+            x_dim=self.embedding_dim,
+            y_dim=self.query_dim,
             reuse=reuse
         ))
 
@@ -224,8 +221,8 @@ class HRED():
             prev_hidden_session,  # h_retain_prev
             (query_encoder, eoq_mask),
             name='session_encoder',
-            x_dim=self.query_hidden_size,
-            y_dim=self.session_hidden_size,
+            x_dim=self.query_dim,
+            y_dim=self.session_dim,
             reuse=reuse
         ))
 
@@ -236,9 +233,9 @@ class HRED():
             prev_hidden_decoder,
             (embedder, eoq_mask, session_encoder),
             name='decoder',
-            x_dim=self.embedding_size,
-            h_dim=self.session_hidden_size,
-            y_dim=self.decoder_hidden_size,
+            x_dim=self.embedding_dim,
+            h_dim=self.session_dim,
+            y_dim=self.decoder_dim,
             reuse=reuse
         )
 
@@ -247,16 +244,16 @@ class HRED():
         # After the decoder we add an additional output layer
         output = layers.output_layer(
             (decoder, embedder),
-            x_dim=self.embedding_size,
-            h_dim=self.decoder_hidden_size,
-            y_dim=self.output_hidden_size,
+            x_dim=self.embedding_dim,
+            h_dim=self.decoder_dim,
+            y_dim=self.output_dim,
             reuse=reuse
         )
 
         # We compute the output logits based on the output layer above
         logits = layers.logits_layer(
             output,
-            x_dim=self.output_hidden_size,
+            x_dim=self.output_dim,
             y_dim=self.vocab_size,
             reuse=reuse
         )
@@ -289,7 +286,6 @@ class HRED():
 
         # logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
         # logits = tf.Print(logits, [tf.argmax(logits,1)], message="This is arg max logits: ")
-
         # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
         # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
 
@@ -298,8 +294,7 @@ class HRED():
 
         # logits = tf.clip_by_value(y_conv,1e-10,1.0)
         # logits -= np.max(logits)
-
-        # loss = -tf.reduce_sum(labels * tf.log(logits))
+        # loss = -tf.reduce_sum(labels * tf.log(self.softmax(logits)))
 
         loss = tf.reduce_sum(
             tf.nn.softmax_cross_entropy_with_logits(logits, labels)
@@ -313,62 +308,45 @@ class HRED():
         Accuracy on non padding symbols
         """
 
+        # Matching non-padding tokens
         correct_prediction = tf.reduce_sum(
             tf.cast(
                 tf.logical_and(
-                    tf.equal(
-                        np.argmax(self.softmax(logits)),
-                        labels
-                    ),
-                    tf.not_equal(
-                        tf.constant(self.eos_symbol, tf.int64),
-                        labels
-                    )
+                    tf.equal(np.argmax(self.softmax(logits)), labels),
+                    tf.not_equal(tf.constant(self.eos_symbol, tf.int64), labels)
                 ),
                 tf.float32
             )
         )
 
+        # All non-padding tokens
         not_padding_sum = tf.reduce_sum(
             tf.cast(
-                tf.not_equal(
-                    tf.constant(self.eos_symbol, tf.int64),
-                    labels
-                ),
+                tf.not_equal(tf.constant(self.eos_symbol, tf.int64), labels),
                 tf.float32
             )
         )
 
         non_padding_acc = tf.div(correct_prediction, not_padding_sum)
         tf.scalar_summary("non-padding-acc", non_padding_acc)
+        
         return non_padding_acc
 
     def non_symbol_accuracy(self, logits, labels):
         """
-        Accuracy without padding, unkown and end-of-query symbol
+        Accuracy without padding, unknown and end-of-query symbol
         """
 
+        # Matching non-symbol tokens (so all actual matching words)
         correct_prediction = tf.reduce_sum(
             tf.cast(
                 tf.logical_and(
-                    tf.equal(
-                        np.argmax(self.softmax(logits)),
-                        labels
-                    ),
+                    tf.equal(np.argmax(self.softmax(logits)), labels),
                     tf.logical_and(
-                        tf.not_equal(
-                            tf.constant(self.eos_symbol, tf.int64),
-                            labels
-                        ),
+                        tf.not_equal(tf.constant(self.eos_symbol, tf.int64), labels),
                         tf.logical_and(
-                            tf.not_equal(
-                                tf.constant(self.eoq_symbol, tf.int64),
-                                labels
-                            ),
-                            tf.not_equal(
-                                tf.constant(self.unk_symbol, tf.int64),
-                                labels
-                            )
+                            tf.not_equal(tf.constant(self.eoq_symbol, tf.int64), labels),
+                            tf.not_equal(tf.constant(self.unk_symbol, tf.int64), labels)
                         )
                     )
                 ),
@@ -376,23 +354,15 @@ class HRED():
             )
         )
 
+        # Sum all non-symbol tokens (so all actual words)
         not_symbol_sum = tf.reduce_sum(
             tf.cast(
                 tf.logical_and(
                     tf.logical_and(
-                        tf.not_equal(
-                            tf.constant(self.eos_symbol, tf.int64),
-                            labels
-                        ),
-                        tf.not_equal(
-                            tf.constant(self.eoq_symbol, tf.int64),
-                            labels
-                        )
+                        tf.not_equal(tf.constant(self.eos_symbol, tf.int64), labels),
+                        tf.not_equal(tf.constant(self.eoq_symbol, tf.int64), labels)
                     ),
-                    tf.not_equal(
-                        tf.constant(self.unk_symbol, tf.int64),
-                        labels
-                    )
+                    tf.not_equal(tf.constant(self.unk_symbol, tf.int64), labels)
                 ),
                 tf.float32
             )
