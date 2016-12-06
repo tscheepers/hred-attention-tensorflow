@@ -154,13 +154,8 @@ class Trainer(object):
 
             input_x = np.array(input_x).flatten()
             result = np.array(result).flatten()
-
-            result_words = [self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in result]
-            # print result_words
-
-            print('Sample input: %s' % (' '.join(map(str, input_x)),))
-            print('Sample output: %s' % (' '.join(map(str, result)),))
-            print('Sample output words: %s' % (' '.join(result_words)))
+            print('Sample input: %s' % (' '.join([self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in input_x]),))
+            print('Sample output words: %s' % (' '.join([self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in result])))
 
     def save_model(self, sess, loss_out):
         if not math.isnan(loss_out):

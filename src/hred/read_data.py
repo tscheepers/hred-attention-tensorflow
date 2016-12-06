@@ -9,7 +9,14 @@ import logging as logger
 
 def read_batch(data_file, batch_size=80, eoq_symbol=1, pad_symbol=2, max_seq_len=50):
     batch = ([], [])
-    subprocess.call('shuf %s -o %s' % (data_file, data_file), shell=True) # shuffling the file for the batches
+
+    from sys import platform
+    if platform == "darwin":
+        command = 'gshuf'
+    else:
+        command = 'shuf'
+
+    subprocess.call('%s %s -o %s' % (command, data_file, data_file), shell=True) # shuffling the file for the batches
     for i, (x, y) in enumerate(read_line(data_file, eoq_symbol)):
         if i != 0 and i % batch_size == 0:
             padded_batch, max_len = add_padding(batch, eoq_symbol, pad_symbol, max_seq_len)
