@@ -21,7 +21,7 @@ CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
 VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 TRAIN_FILE = '../../data/aol_sess_50000.out'
 SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-VOCAB_SIZE = 2503
+VOCAB_SIZE = 50003
 EMBEDDING_DIM = 25
 QUERY_DIM = 50
 SESSION_DIM = 100
@@ -44,26 +44,26 @@ SEED = 1234
 class Trainer(object):
 
     def __init__(self):
-        self.vocab_lookup_dict = cPickle.load(open("../../data/allesandro/dev_large/train.dict.pkl", 'r'))
+        self.vocab_lookup_dict = cPickle.load(open("../../data/allesandro/all/train.dict.pkl", 'r'))
         self.train_data, _ = allesandro_data_iterator.get_batch_iterator(np.random.RandomState(SEED), {
             'eoq_sym': 1,
             'eos_sym': 2,
             'sort_k_batches': 20,
             'bs': BATCH_SIZE,
-            'train_session': "../../data/allesandro/dev_large/train.ses.pkl",
-            'train_rank': "../../data/allesandro/dev_large/train.rnk.pkl",
+            'train_session': "../../data/allesandro/all/train.ses.pkl",
+            'train_rank': "../../data/allesandro/all/train.rnk.pkl",
             'seqlen': MAX_LENGTH,
-            'valid_session': "../../data/allesandro/dev_large/valid.ses.pkl",
-            'valid_rank': "../../data/allesandro/dev_large/valid.rnk.pkl"
+            'valid_session': "../../data/allesandro/all/valid.ses.pkl",
+            'valid_rank': "../../data/allesandro/all/valid.rnk.pkl"
         })
         self.train_data.start()
 
-        # vocab_size = len(self.vocab_lookup_dict)
-        vocab_size = VOCAB_SIZE
+        vocab_size = len(self.vocab_lookup_dict)
+        # vocab_size = VOCAB_SIZE
 
         # self.vocab_lookup_dict = read_data.read_vocab_lookup(VOCAB_FILE)
         self.hred = HRED(vocab_size=vocab_size, embedding_dim=EMBEDDING_DIM, query_dim=QUERY_DIM,
-                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=vocab_size)
+                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=EMBEDDING_DIM)
 
         batch_size = None
         max_length = None
@@ -123,8 +123,8 @@ class Trainer(object):
                 # x_batch = np.transpose(np.asarray(x_batch))
                 # y_batch = np.transpose(np.asarray(y_batch))
 
-                loss_out, _, softmax_out, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
-                    [self.loss, self.optimizer.optimize_op, self.softmax, self.accuracy, self.non_symbol_accuracy],
+                loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
+                    [self.loss, self.optimizer.optimize_op, self.accuracy, self.non_symbol_accuracy],
                     self.hred.populate_feed_dict_with_defaults(
                         batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
                     )
@@ -143,7 +143,8 @@ class Trainer(object):
                 n_pred += seq_len * batch_size
                 cost = total_loss / n_pred
 
-                print("Step %d - Cost: %f   Loss: %f   Accuracy: %f   Accuracy (no symbols): %f  Length: %d" %
+                if iteration % 10 == 0:
+                    print("Step %d - Cost: %f   Loss: %f   Accuracy: %f   Accuracy (no symbols): %f  Length: %d" %
                       (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out, seq_len))
 
                 if iteration % 100 == 0:

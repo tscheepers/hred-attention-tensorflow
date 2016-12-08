@@ -282,14 +282,14 @@ class HRED():
         # labels = tf.Print(labels, [labels], message="This is labels: ")
         # logits = tf.Print(logits, [logits], message="This logits: ")
 
-        labels = tf.one_hot(labels, self.vocab_size)
+        # labels = tf.one_hot(labels, self.vocab_size)
 
         # logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
         # logits = tf.Print(logits, [tf.argmax(logits,1)], message="This is arg max logits: ")
         # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
         # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
 
-        eos_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eos_symbol), tf.float32), 2)
+        eos_mask = tf.cast(tf.not_equal(X, self.eos_symbol), tf.int64)
         labels = labels * eos_mask
 
         # logits = tf.clip_by_value(y_conv,1e-10,1.0)
@@ -297,7 +297,7 @@ class HRED():
         # loss = -tf.reduce_sum(labels * tf.log(self.softmax(logits)))
 
         loss = tf.reduce_sum(
-            tf.nn.softmax_cross_entropy_with_logits(logits, labels)
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels)
         )
 
         tf.scalar_summary("loss", loss)
