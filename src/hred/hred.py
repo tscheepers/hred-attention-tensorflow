@@ -35,41 +35,17 @@ class HRED():
         self.start_output = tf.placeholder(tf.float32, (None, self.output_dim))
         self.start_logits = tf.placeholder(tf.float32, (None, self.vocab_size))
 
-    def populate_feed_dict_with_defaults(self, batch_size=1, feed_dict=None):
-        """
-        Add zero hidden states to a feed dict
-        """
-
-        if feed_dict is None:
-            feed_dict = dict()
-
-        feed_dict[self.start_hidden_query] = np.zeros((2, batch_size, self.query_dim))
-        feed_dict[self.start_hidden_session] = np.zeros((2, batch_size, self.session_dim))
-        feed_dict[self.start_hidden_decoder] = np.zeros((batch_size, self.decoder_dim))
-
-        return feed_dict
-
-    def step_through_session(self, X, start_hidden_query=None, start_hidden_session=None, start_hidden_decoder=None,
-                             return_last_with_hidden_states=False, return_softmax=False, reuse=False):
+    def step_through_session(self, X, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
         :param X: The input sessions. Lists of ints, ints correspond to words
         Shape: (max_length x batch_size)
-        :param start_hidden_query: The first hidden state of the query encoder. Initialized with zeros.
-        Shape: (2 x batch_size x query_dim)
-        :param start_hidden_session: The first hidden state of the session encoder. Iniitalized with zeros.
-        Shape: (2 x batch_size x session_dim)
-        :param start_hidden_decoder: The first hidden state of the decoder. Initialized with zeros.
-        Shape: (batch_size x output_dim)
-        :param start_output:
-        :param start_logits:
         :return:
         """
 
-        if start_hidden_query is None: start_hidden_query = self.start_hidden_query
-        if start_hidden_session is None: start_hidden_session = self.start_hidden_session
-        if start_hidden_decoder is None: start_hidden_decoder = self.start_hidden_decoder
+        num_of_steps = tf.shape(X)[0]
+        batch_size = tf.shape(X)[1]
 
         # Making embeddings for x
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_dim, reuse=reuse)
@@ -92,7 +68,7 @@ class HRED():
                 reuse=reuse
             ),
             (embedder, eoq_mask),  # scan does not accept multiple tensors so we need to pack and unpack
-            initializer=start_hidden_query
+            initializer=tf.zeros((2, batch_size, self.query_dim))
         )
 
         query_encoder, hidden_query = tf.unpack(query_encoder_packed, axis=1)
@@ -109,7 +85,7 @@ class HRED():
                 reuse=reuse
             ),
             (query_encoder, eoq_mask),
-            initializer=start_hidden_session
+            initializer=tf.zeros((2, batch_size, self.session_dim))
         )
 
         session_encoder, hidden_session = tf.unpack(session_encoder_packed, axis=1)
@@ -129,7 +105,7 @@ class HRED():
             ),
             (embedder, eoq_mask, session_encoder),
             # scan does not accept multiple tensors so we need to pack and unpack
-            initializer=start_hidden_decoder
+            initializer=tf.zeros((batch_size, self.decoder_dim))
         )
 
         # After the decoder we add an additional output layer
@@ -153,7 +129,7 @@ class HRED():
             reuse=reuse
         )
 
-        logits = tf.reshape(flatten_logits, (tf.shape(X)[0], tf.shape(X)[1], self.vocab_size))
+        logits = tf.reshape(flatten_logits, (num_of_steps, batch_size, self.vocab_size))
 
         # If we want the softmax back from this step or just the logits f or the loss function
         if return_softmax:

@@ -128,9 +128,7 @@ class Trainer(object):
                 if iteration % 10 == 0:
                     loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
                         [self.loss, self.optimizer.optimize_op, self.accuracy, self.non_symbol_accuracy],
-                        self.hred.populate_feed_dict_with_defaults(
-                            batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
-                        )
+                        {self.X: x_batch, self.Y: y_batch}
                     )
 
                     # Accumulative cost, like in hred-qs
@@ -143,10 +141,7 @@ class Trainer(object):
 
                 else:
                     loss_out, _ = tf_sess.run(
-                        [self.loss, self.optimizer.optimize_op],
-                        self.hred.populate_feed_dict_with_defaults(
-                            batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
-                        )
+                        [self.loss, self.optimizer.optimize_op], {self.X: x_batch, self.Y: y_batch}
                     )
 
                     # Accumulative cost, like in hred-qs
@@ -155,9 +150,7 @@ class Trainer(object):
 
                 # Sumerize
                 if iteration % 100 == 0:
-                    summary_str = tf_sess.run(self.summary, self.hred.populate_feed_dict_with_defaults(
-                        batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
-                    ))
+                    summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch})
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
@@ -176,9 +169,7 @@ class Trainer(object):
 
             softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                 self.session_inference,
-                self.hred.populate_feed_dict_with_defaults(
-                    batch_size=1, feed_dict={self.X: input_x}
-                )
+                feed_dict={self.X: input_x}
             )
 
             # Ignore UNK
