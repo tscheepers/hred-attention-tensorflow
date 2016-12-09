@@ -3,8 +3,10 @@
 An Information Retrieval 2 project.
 
 - **Paper:** A Hierachical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion [pdf](https://arxiv.org/abs/1507.02221)
-- **Data:** AOL Dataset [Thijs' Dropbox](https://www.dropbox.com/s/thuv05pl3wyz6lq/aol-data.tar?dl=0)
-- **Pre-processed data:** [Jörg's Dropbox](https://www.dropbox.com/sh/zm430xgouaibo5q/AABO9OuWDlkqMI5nYM9vgS80a?dl=0)
+- **Data:** 
+  - AOL Dataset: [Thijs' Dropbox](https://www.dropbox.com/s/thuv05pl3wyz6lq/aol-data.tar?dl=0)
+  - Model input for in the `data` folder: [Thijs' Dropbox](https://www.dropbox.com/sh/d9ukeq9uptamik8/AACTfqrnP2erci0N-A3cxu0Fa?dl=0)
+  - Pre-processed data: [Jörg's Dropbox](https://www.dropbox.com/sh/zm430xgouaibo5q/AABO9OuWDlkqMI5nYM9vgS80a?dl=0)
 
 ## TO-DO's 
 
