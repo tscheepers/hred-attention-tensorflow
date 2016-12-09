@@ -10,21 +10,16 @@ An Information Retrieval 2 project.
 
 ## TO-DO's 
 
-- [ ] Preprocessing of the data
-- [ ] Implement a decoder (prototype)
-- [ ] Initial implementation of a seq2seq neural network
-- [ ] Seperate query-level recurrent state and the session-level recurrent state, i.e. implemente session passing
-- [ ] Implement or incorperate "learning to rank" as reranking mechanism
-- [ ] Implement HRED score and include it in the ranking mechanism
+- [x] Preprocessing of the data
+- [x] Implement a decoder (prototype)
+- [x] Initial implementation of a seq2seq neural network
+- [x] Seperate query-level recurrent state and the session-level recurrent state, i.e. implemente session passing
+- [x] Implement or incorperate "learning to rank" as reranking mechanism
+- [x] Implement HRED score and include it in the ranking mechanism
 - [ ] Create interface for query suggestions (both auto-complete as well as, next query suggestion), nice for a demo
 - [ ] Modify the model to include a novel technique
 
 ## Links:
 
 - [Very nice tutorial on IR and LM](http://benjaminbolte.com/blog/2016/keras-language-modeling.html#word-embeddings)
-- [Keras Seq2Seq](https://github.com/farizrahman4u/seq2seq)
-- [Keras Recurrentshop](https://github.com/datalogai/recurrentshop) (Containers and such)
-- [Keras Language Modeling](https://github.com/codekansas/keras-language-modeling)
 - [Original Theano implementation](https://github.com/sordonia/hred-qs)
-- [Fork of original Theano implementation](https://github.com/sweaterr/hred-qs) (with some sample data)
-- [Recurrent Neural Networks: Character RNNs with Keras](http://ml4a.github.io/guides/recurrent_neural_networks/)
