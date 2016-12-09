@@ -46,15 +46,11 @@ class HRED():
         feed_dict[self.start_hidden_query] = np.zeros((2, batch_size, self.query_dim))
         feed_dict[self.start_hidden_session] = np.zeros((2, batch_size, self.session_dim))
         feed_dict[self.start_hidden_decoder] = np.zeros((batch_size, self.decoder_dim))
-        feed_dict[self.start_output] = np.zeros((batch_size, self.output_dim))
-        feed_dict[self.start_logits] = np.zeros((batch_size, self.vocab_size))
 
         return feed_dict
 
     def step_through_session(self, X, start_hidden_query=None, start_hidden_session=None, start_hidden_decoder=None,
-                             start_output=None, start_logits=None, return_last_with_hidden_states=False,
-                             return_softmax=False,
-                             reuse=False):
+                             return_last_with_hidden_states=False, return_softmax=False, reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
@@ -74,10 +70,6 @@ class HRED():
         if start_hidden_query is None: start_hidden_query = self.start_hidden_query
         if start_hidden_session is None: start_hidden_session = self.start_hidden_session
         if start_hidden_decoder is None: start_hidden_decoder = self.start_hidden_decoder
-        if start_output is None: start_output = self.start_output
-        if start_logits is None: start_logits = self.start_logits
-
-        # X = tf.Print(X, [X[:, 0]], message="This is X: ", summarize=20)
 
         # Making embeddings for x
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_dim, reuse=reuse)
@@ -85,7 +77,6 @@ class HRED():
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
         eoq_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
-        # eoq_mask = tf.Print(eoq_mask, [eoq_mask[:,0,:]], message="This is eoq_mask: ", summarize=20)
 
         # Computes the encoded query state. The tensorflow scan function repeatedly applies the gru_layer_with_reset
         # function to (embedder, eoq_mask) and it initialized the gru layer with the zero tensor.
@@ -142,33 +133,26 @@ class HRED():
         )
 
         # After the decoder we add an additional output layer
-        # TODO: This should not have to be a scan function but  because of Tensorflow's 2-D matmul function we do this
-        # for now. Perhaps with tf.batch_matmul ?
-        output_layer = tf.scan(
-            lambda _, x: layers.output_layer(
-                x,
-                x_dim=self.embedding_dim,
-                h_dim=self.decoder_dim,
-                y_dim=self.output_dim,
-                reuse=reuse
-            ),
-            (decoder, embedder),
-            initializer=start_output
+        flatten_decoder = tf.reshape(decoder, (-1, self.decoder_dim))
+        flatten_embedder = tf.reshape(embedder, (-1, self.embedding_dim))
+
+        output_layer = layers.output_layer(
+            (flatten_decoder, flatten_embedder),
+            x_dim=self.embedding_dim,
+            h_dim=self.decoder_dim,
+            y_dim=self.output_dim,
+            reuse=reuse
         )
 
         # We compute the output logits based on the output layer above
-        # TODO: This should not have to be a scan function but because of Tensorflow's 2-D matmul function we do this
-        # for now. Perhaps with tf.batch_matmul ? tf.nn.softmax does accept a 3-D tensor however.
-        logits = tf.scan(
-            lambda _, x: layers.logits_layer(
-                x,
-                x_dim=self.output_dim,
-                y_dim=self.vocab_size,
-                reuse=reuse
-            ),
+        flatten_logits = layers.logits_layer(
             output_layer,
-            initializer=start_logits
+            x_dim=self.output_dim,
+            y_dim=self.vocab_size,
+            reuse=reuse
         )
+
+        logits = tf.reshape(flatten_logits, (tf.shape(X)[0], tf.shape(X)[1], self.vocab_size))
 
         # If we want the softmax back from this step or just the logits f or the loss function
         if return_softmax:
@@ -279,22 +263,8 @@ class HRED():
         this does this method for you
         """
 
-        # labels = tf.Print(labels, [labels], message="This is labels: ")
-        # logits = tf.Print(logits, [logits], message="This logits: ")
-
-        # labels = tf.one_hot(labels, self.vocab_size)
-
-        # logits = tf.Print(logits, [tf.reduce_max(logits)], message="This is max logits: ")
-        # logits = tf.Print(logits, [tf.argmax(logits,1)], message="This is arg max logits: ")
-        # logits = tf.Print(logits, [tf.reduce_min(logits)], message="This is min logits: ")
-        # logits = tf.Print(logits, [tf.reduce_sum(logits, reduction_indices=[2])[:, 1]], message="This is sum logits: ", summarize=5)
-
         eos_mask = tf.cast(tf.not_equal(X, self.eos_symbol), tf.int64)
         labels = labels * eos_mask
-
-        # logits = tf.clip_by_value(y_conv,1e-10,1.0)
-        # logits -= np.max(logits)
-        # loss = -tf.reduce_sum(labels * tf.log(self.softmax(logits)))
 
         loss = tf.reduce_sum(
             tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels)
