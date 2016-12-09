@@ -15,7 +15,7 @@ import sordoni.data_iterator as sordoni_data_iterator
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
-TRAIN_DIR = '../../logs'
+LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
@@ -113,7 +113,7 @@ class Trainer(object):
         with tf.Session() as tf_sess:
 
             tf_sess.run(init_op)
-            summary_writer = tf.train.SummaryWriter(TRAIN_DIR, tf_sess.graph)
+            summary_writer = tf.train.SummaryWriter(LOGS_DIR, tf_sess.graph)
 
             total_loss = 0.0
             n_pred = 0.0
