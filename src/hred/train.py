@@ -11,16 +11,24 @@ from hred import HRED
 from optimizer import Optimizer
 import cPickle
 import math
-import allesandro.data_iterator as allesandro_data_iterator
+import sordoni.data_iterator as sordoni_data_iterator
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
-TRAIN_DIR = 'logs'
+TRAIN_DIR = '../../logs'
+UNK_SYMBOL = 0
+EOQ_SYMBOL = 1
+EOS_SYMBOL = 2
+
+N_BUCKETS = 20
 
 CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
-VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
-TRAIN_FILE = '../../data/aol_sess_50000.out'
-SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
+# OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
+# OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
+# OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
+SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
 VOCAB_SIZE = 50003
 EMBEDDING_DIM = 25
 QUERY_DIM = 50
@@ -29,9 +37,9 @@ BATCH_SIZE = 80
 MAX_LENGTH = 50
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
-# VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
-# TRAIN_FILE = '../../data/small_train.out'
-# SAMPLE_FILE = '../../data/sample_small_train.out'
+# OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
+# OUR_TRAIN_FILE = '../../data/small_train.out'
+# OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
 # VOCAB_SIZE = 2504
 # EMBEDDING_DIM = 10
 # QUERY_DIM = 15
@@ -45,29 +53,29 @@ class Trainer(object):
 
     def __init__(self):
 
-        vocab = cPickle.load(open("../../data/allesandro/all/train.dict.pkl", 'r'))
+        vocab = cPickle.load(open(SORDONI_VOCAB_FILE, 'r'))
         self.vocab_lookup_dict = {k: v for v, k, count in vocab}
 
-        self.train_data, self.valid_data = allesandro_data_iterator.get_batch_iterator(np.random.RandomState(SEED), {
-            'eoq_sym': 1,
-            'eos_sym': 2,
-            'sort_k_batches': 20,
+        self.train_data, self.valid_data = sordoni_data_iterator.get_batch_iterator(np.random.RandomState(SEED), {
+            'eoq_sym': EOQ_SYMBOL,
+            'eos_sym': EOS_SYMBOL,
+            'sort_k_batches': N_BUCKETS,
             'bs': BATCH_SIZE,
-            'train_session': "../../data/allesandro/all/train.ses.pkl",
-            'train_rank': "../../data/allesandro/all/train.rnk.pkl",
+            'train_session': SORDONI_TRAIN_FILE,
             'seqlen': MAX_LENGTH,
-            'valid_session': "../../data/allesandro/all/valid.ses.pkl",
-            'valid_rank': "../../data/allesandro/all/valid.rnk.pkl"
+            'valid_session': SORDONI_VALID_FILE
         })
         self.train_data.start()
         self.valid_data.start()
 
         vocab_size = len(self.vocab_lookup_dict)
-        # vocab_size = VOCAB_SIZE
 
-        # self.vocab_lookup_dict = read_data.read_vocab_lookup(VOCAB_FILE)
+        # vocab_size = VOCAB_SIZE
+        # self.vocab_lookup_dict = read_data.read_vocab_lookup(OUR_VOCAB_FILE)
+
         self.hred = HRED(vocab_size=vocab_size, embedding_dim=EMBEDDING_DIM, query_dim=QUERY_DIM,
-                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=EMBEDDING_DIM)
+                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=EMBEDDING_DIM,
+                         eoq_symbol=EOQ_SYMBOL, eos_symbol=EOS_SYMBOL, unk_symbol=UNK_SYMBOL)
 
         batch_size = None
         max_length = None
@@ -96,8 +104,6 @@ class Trainer(object):
 
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
-
-
 
     def train(self, max_epochs=1000, max_length=50, batch_size=80):
 
@@ -201,10 +207,8 @@ class Trainer(object):
 
             input_x = np.array(input_x).flatten()
             result = np.array(result).flatten()
-            print('Sample input: %s' % (' '.join([self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in input_x]),))
-            print('Sample output words: %s' % (' '.join([self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in result])))
-
-
+            print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+            print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
 
     def save_model(self, sess, loss_out):
         if not math.isnan(loss_out):

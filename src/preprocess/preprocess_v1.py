@@ -9,7 +9,7 @@ from nltk import word_tokenize
 from nltk.corpus import stopwords
 from datetime import datetime, timedelta
 import numpy as np
-from utils import Vocabulary
+from gefoefel.utils import Vocabulary
 
 
 # TODO: need to skip a query if all query words are unknown
