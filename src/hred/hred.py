@@ -29,12 +29,6 @@ class HRED():
         self.eoq_symbol = eoq_symbol  # End of Query symbol
         self.eos_symbol = eos_symbol  # End of Session symbol
 
-        self.start_hidden_query = tf.placeholder(tf.float32, (2, None, self.query_dim))
-        self.start_hidden_session = tf.placeholder(tf.float32, (2, None, self.session_dim))
-        self.start_hidden_decoder = tf.placeholder(tf.float32, (None, self.decoder_dim))
-        self.start_output = tf.placeholder(tf.float32, (None, self.output_dim))
-        self.start_logits = tf.placeholder(tf.float32, (None, self.vocab_size))
-
     def step_through_session(self, X, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
