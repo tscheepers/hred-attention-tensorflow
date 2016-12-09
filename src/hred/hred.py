@@ -137,7 +137,8 @@ class HRED():
         flatten_embedder = tf.reshape(embedder, (-1, self.embedding_dim))
 
         output_layer = layers.output_layer(
-            (flatten_decoder, flatten_embedder),
+            flatten_embedder,
+            flatten_decoder,
             x_dim=self.embedding_dim,
             h_dim=self.decoder_dim,
             y_dim=self.output_dim,

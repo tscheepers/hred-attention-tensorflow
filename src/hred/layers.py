@@ -86,13 +86,11 @@ def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=51
     return h
 
 
-def output_layer(x_packed, name='output', x_dim=256, y_dim=512, h_dim=512, reuse=None):
+def output_layer(x, h, name='output', x_dim=256, y_dim=512, h_dim=512, reuse=None):
     """
     Used after the decoder
     This is used for "full" state bias in the decoder which we did not use in the end.
     """
-
-    h, x, = x_packed
 
     with tf.variable_scope(name, reuse=reuse):
         Wh = tf.get_variable(name='weight_hidden', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
