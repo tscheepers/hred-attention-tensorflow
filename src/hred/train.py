@@ -53,7 +53,6 @@ SEED = 1234
 
 
 class Trainer(object):
-
     def __init__(self):
 
         vocab = cPickle.load(open(SORDONI_VOCAB_FILE, 'r'))
@@ -97,10 +96,12 @@ class Trainer(object):
         self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
-        self.session_inference = self.hred.step_through_session(self.X, return_softmax=True,
-                                                                return_last_with_hidden_states=True, reuse=True)
-        self.step_inference = self.hred.single_step(self.X_sample, self.H_query, self.H_session, self.H_decoder,
-                                                    reuse=True)
+        self.session_inference = self.hred.step_through_session(
+            self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+        )
+        self.step_inference = self.hred.single_step(
+            self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
+        )
 
         self.optimizer = Optimizer(self.loss)
         self.summary = tf.merge_all_summaries()
@@ -137,11 +138,12 @@ class Trainer(object):
                     cost = total_loss / n_pred
 
                     print("Step %d - Cost: %f   Loss: %f   Accuracy: %f   Accuracy (no symbols): %f  Length: %d" %
-                      (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out, seq_len))
+                          (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out, seq_len))
 
                 else:
                     loss_out, _ = tf_sess.run(
-                        [self.loss, self.optimizer.optimize_op], {self.X: x_batch, self.Y: y_batch}
+                        [self.loss, self.optimizer.optimize_op],
+                        {self.X: x_batch, self.Y: y_batch}
                     )
 
                     # Accumulative cost, like in hred-qs
