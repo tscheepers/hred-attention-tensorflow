@@ -19,10 +19,11 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
+RESTORE = False
 
 N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-huge.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
@@ -30,9 +31,12 @@ SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
 SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
 SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
 VOCAB_SIZE = 50003
-EMBEDDING_DIM = 25
-QUERY_DIM = 50
-SESSION_DIM = 100
+# EMBEDDING_DIM = 25
+# QUERY_DIM = 50
+# SESSION_DIM = 100
+EMBEDDING_DIM = 128
+QUERY_DIM = 256
+SESSION_DIM = 512
 BATCH_SIZE = 80
 MAX_LENGTH = 50
 
@@ -116,13 +120,19 @@ class Trainer(object):
 
         with tf.Session() as tf_sess:
 
-            tf_sess.run(init_op)
+            if RESTORE:
+                # Restore variables from disk.
+                self.saver.restore(tf_sess, CHECKPOINT_FILE)
+                print("Model restored.")
+            else:
+                tf_sess.run(init_op)
+
             summary_writer = tf.train.SummaryWriter(LOGS_DIR, tf_sess.graph)
 
             total_loss = 0.0
             n_pred = 0.0
 
-            for iteration in range(10000):
+            for iteration in range(1000000):
 
                 x_batch, y_batch, seq_len = self.get_batch(self.train_data)
 
@@ -174,12 +184,21 @@ class Trainer(object):
                 feed_dict={self.X: input_x}
             )
 
-            # Ignore UNK
-            arg_sort = np.argsort(softmax_out, axis=1)
-            if arg_sort[0, 0] == self.hred.unk_symbol:
-                x = arg_sort[:, 1]
-            else:
-                x = arg_sort[:, 0]
+            queries_accepted = 0
+            # Min amount of queries to sample
+            min_queries = 3
+
+            arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
+
+            # Ignore UNK and EOS (for the first min_queries)
+            arg_sort_i = 0
+            while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
+                    arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                arg_sort_i += 1
+            x = arg_sort[arg_sort_i]
+
+            if x == self.hred.eoq_symbol:
+                queries_accepted += 1
 
             result = [x]
             i = 0
@@ -187,16 +206,21 @@ class Trainer(object):
             while x != self.hred.eos_symbol and i < max_sample_length:
                 softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                     self.step_inference,
-                    {self.X_sample: x, self.H_query: hidden_query, self.H_session: hidden_session,
+                    {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
                      self.H_decoder: hidden_decoder}
                 )
 
-                # Ignore UNK
-                arg_sort = np.argsort(softmax_out, axis=1)
-                if arg_sort[0, 0] == self.hred.unk_symbol:
-                    x = arg_sort[:, 1]
-                else:
-                    x = arg_sort[:, 0]
+                arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
+
+                # Ignore UNK and EOS (for the first min_queries)
+                arg_sort_i = 0
+                while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
+                                arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                    arg_sort_i += 1
+                x = arg_sort[arg_sort_i]
+
+                if x == self.hred.eoq_symbol:
+                    queries_accepted += 1
 
                 result += [x]
                 i += 1

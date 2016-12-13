@@ -234,12 +234,13 @@ class HRED():
         You do not have to pass a one hot vector for the labels,
         this does this method for you
         """
+        labels = tf.one_hot(labels, self.vocab_size)
 
-        eos_mask = tf.cast(tf.not_equal(X, self.eos_symbol), tf.int64)
+        eos_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eos_symbol), tf.float32), 2)
         labels = labels * eos_mask
 
         loss = tf.reduce_sum(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels)
+            tf.nn.softmax_cross_entropy_with_logits(logits, labels)
         )
 
         tf.scalar_summary("loss", loss)
