@@ -1,8 +1,4 @@
-"""
-This file takes a .ctx file as input.
-Then for every row it will
 
-"""
 from collections import defaultdict
 import numpy as np
 from nltk import ngrams
@@ -50,8 +46,8 @@ def make_ngram_distribution(bg_session_file, n=3):
         session = session.strip('\n')
         queries = session.strip().split('\t')
         for query in queries:
-            ngram_list = [query[i:i+n] for i in range(0,len(query),n)]
-            for ngram in ngram_list:
+            for i in range(0,len(query)-n):
+                ngram = query[i:i + n]
                 frequency_dict[ngram] = frequency_dict.get(ngram, 0) + 1
     return frequency_dict
 
@@ -149,9 +145,14 @@ def main(FLAGS):
         n_gram_ids = ngram_to_ids(pruned_dicts)
         store_dist(n_gram_ids)
 
-        txt_to_ngram_idx(FLAGS.bg_file_path, n_gram_ids, FLAGS, FLAGS.output_file)
+        txt_to_ngram_idx('./data/full_data/tr_sessions.ctx', n_gram_ids, FLAGS, './data/output/tr_sessions.out')
+        txt_to_ngram_idx('./data/full_data/val_sessions.ctx', n_gram_ids, FLAGS, './data/output/val_sessions.out')
+
     else:
-        #txt_to_ngram_idx(FLAGS.bg_file_path, n_gram_ids, FLAGS, FLAGS.output_file)
+        """
+        WRITE FUNCTION TO LOAD DIST FROM DATA
+        """
+        txt_to_ngram_idx(FLAGS.bg_file_path, n_gram_ids, FLAGS, FLAGS.output_file)
 
 
 
