@@ -9,42 +9,79 @@ tf.logging.set_verbosity(tf.logging.DEBUG)
 
 from hred import HRED
 from optimizer import Optimizer
-import read_data
+import cPickle
 import math
+import sordoni.data_iterator as sordoni_data_iterator
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
-TRAIN_DIR = 'logs'
+LOGS_DIR = '../../logs'
+UNK_SYMBOL = 0
+EOQ_SYMBOL = 1
+EOS_SYMBOL = 2
+RESTORE = True
 
-# CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
-# VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
-# TRAIN_FILE = '../../data/aol_sess_50000.out'
-# SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-# VOCAB_SIZE = 50004
-# EMBEDDING_DIM = 300
-# QUERY_DIM = 1000
-# SESSION_DIM = 1500
-# BATCH_SIZE = 80
-# MAX_LENGTH = 50
+N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
-VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
-TRAIN_FILE = '../../data/small_train.out'
-SAMPLE_FILE = '../../data/sample_small_train.out'
-VOCAB_SIZE = 2504
-EMBEDDING_DIM = 10
-QUERY_DIM = 15
-SESSION_DIM = 20
+CHECKPOINT_FILE = '../../checkpoints/model-huge.ckpt'
+# OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
+# OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
+# OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
+SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
+VOCAB_SIZE = 50003
+# EMBEDDING_DIM = 25
+# QUERY_DIM = 50
+# SESSION_DIM = 100
+EMBEDDING_DIM = 128
+QUERY_DIM = 256
+SESSION_DIM = 512
 BATCH_SIZE = 80
 MAX_LENGTH = 50
 
+# CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
+# OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
+# OUR_TRAIN_FILE = '../../data/small_train.out'
+# OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
+# SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
+# SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
+# SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
+# VOCAB_SIZE = 2504
+# EMBEDDING_DIM = 10
+# QUERY_DIM = 15
+# SESSION_DIM = 20
+# BATCH_SIZE = 80
+# MAX_LENGTH = 50
+SEED = 1234
+
 
 class Trainer(object):
-
     def __init__(self):
-        self.vocab_lookup_dict = read_data.read_vocab_lookup(VOCAB_FILE)
-        self.hred = HRED(vocab_size=VOCAB_SIZE, embedding_dim=EMBEDDING_DIM, query_dim=QUERY_DIM,
-                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=VOCAB_SIZE)
+
+        vocab = cPickle.load(open(SORDONI_VOCAB_FILE, 'r'))
+        self.vocab_lookup_dict = {k: v for v, k, count in vocab}
+
+        self.train_data, self.valid_data = sordoni_data_iterator.get_batch_iterator(np.random.RandomState(SEED), {
+            'eoq_sym': EOQ_SYMBOL,
+            'eos_sym': EOS_SYMBOL,
+            'sort_k_batches': N_BUCKETS,
+            'bs': BATCH_SIZE,
+            'train_session': SORDONI_TRAIN_FILE,
+            'seqlen': MAX_LENGTH,
+            'valid_session': SORDONI_VALID_FILE
+        })
+        self.train_data.start()
+        self.valid_data.start()
+
+        vocab_size = len(self.vocab_lookup_dict)
+
+        # vocab_size = VOCAB_SIZE
+        # self.vocab_lookup_dict = read_data.read_vocab_lookup(OUR_VOCAB_FILE)
+
+        self.hred = HRED(vocab_size=vocab_size, embedding_dim=EMBEDDING_DIM, query_dim=QUERY_DIM,
+                         session_dim=SESSION_DIM, decoder_dim=QUERY_DIM, output_dim=EMBEDDING_DIM,
+                         eoq_symbol=EOQ_SYMBOL, eos_symbol=EOS_SYMBOL, unk_symbol=UNK_SYMBOL)
 
         batch_size = None
         max_length = None
@@ -63,10 +100,12 @@ class Trainer(object):
         self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
-        self.session_inference = self.hred.step_through_session(self.X, return_softmax=True,
-                                                                return_last_with_hidden_states=True, reuse=True)
-        self.step_inference = self.hred.single_step(self.X_sample, self.H_query, self.H_session, self.H_decoder,
-                                                    reuse=True)
+        self.session_inference = self.hred.step_through_session(
+            self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+        )
+        self.step_inference = self.hred.single_step(
+            self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
+        )
 
         self.optimizer = Optimizer(self.loss)
         self.summary = tf.merge_all_summaries()
@@ -81,87 +120,252 @@ class Trainer(object):
 
         with tf.Session() as tf_sess:
 
-            tf_sess.run(init_op)
-            summary_writer = tf.train.SummaryWriter(TRAIN_DIR, tf_sess.graph)
+            if RESTORE:
+                # Restore variables from disk.
+                self.saver.restore(tf_sess, CHECKPOINT_FILE)
+                print("Model restored.")
+            else:
+                tf_sess.run(init_op)
 
-            iteration = 0
+            summary_writer = tf.train.SummaryWriter(LOGS_DIR, tf_sess.graph)
+
             total_loss = 0.0
             n_pred = 0.0
 
-            for epoch in range(max_epochs):
+            for iteration in range(1000000):
 
-                for ((x_batch, y_batch), seq_len) in read_data.read_batch(
-                        TRAIN_FILE, batch_size=batch_size, max_seq_len=max_length
-                ):
-                    x_batch = np.transpose(np.asarray(x_batch))
-                    y_batch = np.transpose(np.asarray(y_batch))
+                x_batch, y_batch, seq_len = self.get_batch(self.train_data)
 
-                    loss_out, _, softmax_out, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
-                        [self.loss, self.optimizer.optimize_op, self.softmax, self.accuracy, self.non_symbol_accuracy],
-                        self.hred.populate_feed_dict_with_defaults(
-                            batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
-                        )
+                if iteration % 10 == 0:
+                    loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
+                        [self.loss, self.optimizer.optimize_op, self.accuracy, self.non_symbol_accuracy],
+                        {self.X: x_batch, self.Y: y_batch}
                     )
-
-                    # Sumerize
-                    summary_str = tf_sess.run(self.summary, self.hred.populate_feed_dict_with_defaults(
-                        batch_size=batch_size, feed_dict={self.X: x_batch, self.Y: y_batch}
-                    ))
-                    summary_writer.add_summary(summary_str, iteration)
-                    summary_writer.flush()
 
                     # Accumulative cost, like in hred-qs
                     total_loss += loss_out
                     n_pred += seq_len * batch_size
                     cost = total_loss / n_pred
 
-                    print("Step %d - Cost: %f   Loss: %f   Accuracy: %f   Accuracy (no symbols): %f" %
-                          (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out))
+                    print("Step %d - Cost: %f   Loss: %f   Accuracy: %f   Accuracy (no symbols): %f  Length: %d" %
+                          (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out, seq_len))
 
-                    if iteration % 100 == 0:
-                        self.save_model(tf_sess, loss_out)
-                        self.sample(tf_sess)
+                else:
+                    loss_out, _ = tf_sess.run(
+                        [self.loss, self.optimizer.optimize_op],
+                        {self.X: x_batch, self.Y: y_batch}
+                    )
 
-                    iteration += 1
+                    # Accumulative cost, like in hred-qs
+                    total_loss += loss_out
+                    n_pred += seq_len * batch_size
 
-    def sample(self, sess, max_sample_length=30):
+                # Sumerize
+                if iteration % 100 == 0:
+                    summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch})
+                    summary_writer.add_summary(summary_str, iteration)
+                    summary_writer.flush()
 
-        for (x, _) in read_data.read_line(SAMPLE_FILE):
+                if iteration % 100 == 0:
+                    self.save_model(tf_sess, loss_out)
+                    self.sample(tf_sess)
+                    self.sample_beam(tf_sess)
 
-            input_x = np.expand_dims(np.asarray(x), 1)
+                iteration += 1
+
+    def sample(self, sess, max_sample_length=30, num_of_samples=3):
+
+        for i in range(num_of_samples):
+
+            x_batch, _, seq_len = self.get_batch(self.valid_data)
+            input_x = np.expand_dims(x_batch[:-(seq_len / 2), 1], axis=1)
 
             softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                 self.session_inference,
-                self.hred.populate_feed_dict_with_defaults(
-                    batch_size=1, feed_dict={self.X: input_x}
-                )
+                feed_dict={self.X: input_x}
             )
 
-            x = np.argmax(softmax_out, axis=1)
+            queries_accepted = 0
+            # Min amount of queries to sample
+            min_queries = 3
+
+            arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
+
+            # Ignore UNK and EOS (for the first min_queries)
+            arg_sort_i = 0
+            while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
+                            arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                arg_sort_i += 1
+            x = arg_sort[arg_sort_i]
+
+            if x == self.hred.eoq_symbol:
+                queries_accepted += 1
+
             result = [x]
             i = 0
 
             while x != self.hred.eos_symbol and i < max_sample_length:
                 softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                     self.step_inference,
-                    {self.X_sample: x, self.H_query: hidden_query, self.H_session: hidden_session,
+                    {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
                      self.H_decoder: hidden_decoder}
                 )
 
-                x = np.argmax(softmax_out, axis=1)
+                arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
+
+                # Ignore UNK and EOS (for the first min_queries)
+                arg_sort_i = 0
+                while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
+                                arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                    arg_sort_i += 1
+                x = arg_sort[arg_sort_i]
+
+                if x == self.hred.eoq_symbol:
+                    queries_accepted += 1
+
                 result += [x]
                 i += 1
 
             input_x = np.array(input_x).flatten()
             result = np.array(result).flatten()
-            print('Sample input: %s' % (' '.join([self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in input_x]),))
-            print('Sample output words: %s' % (' '.join([self.vocab_lookup_dict.get(x, "NOT_FOUND") for x in result])))
+            print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+            print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+
+    def sample_beam(self, sess, max_sample_length=30, num_of_samples=3):
+
+        for i in range(num_of_samples):
+
+            x_batch, _, seq_len = self.get_batch(self.valid_data)
+            input_x = np.expand_dims(x_batch[:-(seq_len / 2), 1], axis=1)
+
+            softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
+                self.session_inference,
+                feed_dict={self.X: input_x}
+            )
+
+            max_length = 10
+            beam_size = 5
+            original_hypotheses = []
+            final_hypotheses = []
+
+            # Min amount of queries to sample
+            min_queries = 3
+
+            arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
+            arg_sort_i = 0
+
+            # create hypothesis
+            while len(original_hypotheses) < beam_size:
+
+                queries_accepted = 0
+
+                # Ignore UNK and EOS (for the first min_queries)
+                while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
+                                arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                    arg_sort_i += 1
+
+                x = arg_sort[arg_sort_i]
+                arg_sort_i += 1
+
+                if x == self.hred.eoq_symbol:
+                    queries_accepted += 1
+
+                result = [x]
+                prob = softmax_out[0][x]
+                original_hypotheses += [(prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted)]
+
+            hypotheses = original_hypotheses
+            i = 0
+
+            while beam_size > 0 and i <= max_length:
+
+                new_hypotheses = []
+
+                for prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted in hypotheses:
+
+                    softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
+                        self.step_inference,
+                        {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
+                         self.H_decoder: hidden_decoder}
+                    )
+
+                    arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
+                    arg_sort_i = 0
+
+                    new_hypotheses_a = []
+
+                    # create hypothesis
+                    while len(new_hypotheses_a) < beam_size:
+
+                        # Ignore UNK and EOS (for the first min_queries)
+                        while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
+                                        arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                            arg_sort_i += 1
+
+                        new_x = arg_sort[arg_sort_i]
+                        arg_sort_i += 1
+
+                        new_queries_accepted = queries_accepted
+                        if x == self.hred.eoq_symbol:
+                            new_queries_accepted = queries_accepted + 1
+
+                        new_result = result + [new_x]
+                        new_prob = softmax_out[0][new_x]  # + prob
+                        new_hypotheses_a += [(new_prob, new_x, new_result, hidden_query, hidden_session, hidden_decoder, new_queries_accepted)]
+
+                    new_hypotheses += new_hypotheses_a
+                    
+                new_hypotheses = sorted(new_hypotheses, key=lambda x: x[0], reverse=True)
+
+                # for prob, _, result, _, _, _, _ in new_hypotheses[:20]:
+                #     result = np.array(result).flatten()
+                #     print('Sample progress (%f): %s' % (prob, ' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+
+                new_hypotheses = new_hypotheses[:beam_size]
+                hypotheses = []
+
+                for hypothesis in new_hypotheses:
+                    _, x, _, _, _, _, queries_accepted = hypothesis
+
+                    if x == self.hred.eos_symbol:
+                        final_hypotheses += [hypothesis]
+                        beam_size -= 1
+                    else:
+                        hypotheses += [hypothesis]
+
+                i += 1
+
+            final_hypotheses += hypotheses
+
+            input_x = np.array(input_x).flatten()
+            print('\n\nSample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+
+            for _, _, result, _, _, _, _ in final_hypotheses:
+                result = np.array(result).flatten()
+                print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
 
     def save_model(self, sess, loss_out):
         if not math.isnan(loss_out):
             # Save the variables to disk.
             save_path = self.saver.save(sess, CHECKPOINT_FILE)
             print("Model saved in file: %s" % save_path)
+
+    def get_batch(self, train_data):
+
+        # The training is done with a trick. We append a special </q> at the beginning of the dialog
+        # so that we can predict also the first sent in the dialog starting from the dialog beginning token (</q>).
+
+        data = train_data.next()
+        seq_len = data['max_length']
+        prepend = np.ones((1, data['x'].shape[1]))
+        x_data_full = np.concatenate((prepend, data['x']))
+        x_batch = x_data_full[:seq_len]
+        y_batch = x_data_full[1:seq_len + 1]
+
+        # x_batch = np.transpose(np.asarray(x_batch))
+        # y_batch = np.transpose(np.asarray(y_batch))
+
+        return x_batch, y_batch, seq_len
 
 
 if __name__ == '__main__':

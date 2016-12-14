@@ -86,13 +86,11 @@ def gru_layer_with_state_reset(h_prev, x_packed, name='gru', x_dim=256, h_dim=51
     return h
 
 
-def output_layer(x_packed, name='output', x_dim=256, y_dim=512, h_dim=512, reuse=None):
+def output_layer(x, h, name='output', x_dim=256, y_dim=512, h_dim=512, reuse=None):
     """
     Used after the decoder
     This is used for "full" state bias in the decoder which we did not use in the end.
     """
-
-    h, x, = x_packed
 
     with tf.variable_scope(name, reuse=reuse):
         Wh = tf.get_variable(name='weight_hidden', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
@@ -196,7 +194,7 @@ def _rnn_layer(h_prev, x, name='rnn', x_dim=256, y_dim=512, reuse=None):
 
     return h
 
-def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h_dim=512, reuse=None):
+def _gru_layer_with_state_bias(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, s_dim=512, reuse=None):
     """
     Used for decoder. In this GRU the state of the session encoder layer is used when
     computing the decoder updates.
@@ -209,7 +207,7 @@ def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h
         with tf.variable_scope('reset_gate', reuse=reuse):
             Wi_r = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             Wh_r = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=initializer.orthogonal_initializer(0.01))
-            Ws_r = tf.get_variable(name='weight_state', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+            Ws_r = tf.get_variable(name='weight_state', shape=(s_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             b_r = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
             r = tf.sigmoid(tf.matmul(x, Wi_r) + tf.matmul(h_prev, Wh_r) + tf.matmul(state, Ws_r) + b_r)
 
@@ -217,7 +215,7 @@ def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h
         with tf.variable_scope('update_gate', reuse=reuse):
             Wi_z = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             Wh_z = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=initializer.orthogonal_initializer(0.01))
-            Ws_z = tf.get_variable(name='weight_state', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+            Ws_z = tf.get_variable(name='weight_state', shape=(s_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             b_z = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
             z = tf.sigmoid(tf.matmul(x, Wi_z) + tf.matmul(h_prev, Wh_z) + tf.matmul(state, Ws_z) + b_z)
 
@@ -225,7 +223,7 @@ def _gru_layer_with_state(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, h
         with tf.variable_scope('candidate_update', reuse=reuse):
             Wi_h_tilde = tf.get_variable(name='weight_input', shape=(x_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             Wh_h_tilde = tf.get_variable(name='weight_hidden', shape=(y_dim, y_dim), initializer=initializer.orthogonal_initializer(0.01))
-            Ws_h_tilde = tf.get_variable(name='weight_state', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+            Ws_h_tilde = tf.get_variable(name='weight_state', shape=(s_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
             b_h_tilde = tf.get_variable(name='bias', shape=(y_dim,), initializer=tf.constant_initializer(0.0))
             h_tilde = tf.tanh(tf.matmul(x, Wi_h_tilde) + \
                       tf.matmul(r * h_prev, Wh_h_tilde) + \
