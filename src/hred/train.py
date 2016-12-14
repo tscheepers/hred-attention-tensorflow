@@ -7,6 +7,9 @@ import subprocess
 
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
+import sys
+sys.path.append("/home/maartje/Documents/Studie/IR2/ir2/src/")
+
 from hred import HRED
 from optimizer import Optimizer
 import cPickle
@@ -23,36 +26,36 @@ RESTORE = True
 
 N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge.ckpt'
-# OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
-# OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
-# OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
-SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
-SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
-VOCAB_SIZE = 50003
-# EMBEDDING_DIM = 25
-# QUERY_DIM = 50
-# SESSION_DIM = 100
-EMBEDDING_DIM = 128
-QUERY_DIM = 256
-SESSION_DIM = 512
-BATCH_SIZE = 80
-MAX_LENGTH = 50
-
-# CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
-# OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
-# OUR_TRAIN_FILE = '../../data/small_train.out'
-# OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
-# SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
-# SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
-# SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
-# VOCAB_SIZE = 2504
-# EMBEDDING_DIM = 10
-# QUERY_DIM = 15
-# SESSION_DIM = 20
+# CHECKPOINT_FILE = '../../checkpoints/model-huge.ckpt'
+# # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
+# # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
+# # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
+# SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
+# SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
+# SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
+# VOCAB_SIZE = 50003
+# # EMBEDDING_DIM = 25
+# # QUERY_DIM = 50
+# # SESSION_DIM = 100
+# EMBEDDING_DIM = 128
+# QUERY_DIM = 256
+# SESSION_DIM = 512
 # BATCH_SIZE = 80
 # MAX_LENGTH = 50
+
+CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
+OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
+OUR_TRAIN_FILE = '../../data/small_train.out'
+OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
+SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
+VOCAB_SIZE = 2504
+EMBEDDING_DIM = 10
+QUERY_DIM = 15
+SESSION_DIM = 20
+BATCH_SIZE = 80
+MAX_LENGTH = 50
 SEED = 1234
 
 
@@ -132,7 +135,7 @@ class Trainer(object):
             total_loss = 0.0
             n_pred = 0.0
 
-            for iteration in range(1000000):
+            for iteration in range(20): #range(1000000):
 
                 x_batch, y_batch, seq_len = self.get_batch(self.train_data)
 
@@ -160,13 +163,15 @@ class Trainer(object):
                     total_loss += loss_out
                     n_pred += seq_len * batch_size
 
-                # Sumerize
-                if iteration % 100 == 0:
+                # Summarize
+                if iteration % 10 == 0:
+                # if iteration % 100 == 0:
                     summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch})
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                if iteration % 100 == 0:
+                if iteration % 10 == 0:
+                # if iteration % 100 == 0:
                     self.save_model(tf_sess, loss_out)
                     self.sample(tf_sess)
                     self.sample_beam(tf_sess)
