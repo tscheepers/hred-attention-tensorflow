@@ -11,7 +11,7 @@ from hred import HRED
 from optimizer import Optimizer
 import cPickle
 import math
-import sordoni.data_iterator as sordoni_data_iterator
+import src.sordoni.data_iterator as sordoni_data_iterator
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
@@ -19,22 +19,17 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
+RESTORE = True
 
 N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-large.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/attention/model-dev_large.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
-SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
-SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
-VOCAB_SIZE = 50003
-EMBEDDING_DIM = 25
-QUERY_DIM = 50
-SESSION_DIM = 100
-BATCH_SIZE = 80
-MAX_LENGTH = 50
+SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
