@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import subprocess
 
-tf.logging.set_verbosity(tf.logging.DEBUG)
+tf.logging.set_verbosity(tf.logging.DEBUG) # test
 
 from hred import HRED
 from optimizer import Optimizer
