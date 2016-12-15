@@ -19,11 +19,11 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = True
+RESTORE = False
 
 N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-huge2.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
@@ -159,6 +159,11 @@ class Trainer(object):
                     # Accumulative cost, like in hred-qs
                     total_loss += loss_out
                     n_pred += seq_len * batch_size
+                    cost = total_loss / n_pred
+
+                if math.isnan(loss_out) or math.isnan(cost) or cost > 100:
+                    print("Found inconsistent results, restoring model...")
+                    self.saver.restore(tf_sess, CHECKPOINT_FILE)
 
                 # Sumerize
                 if iteration % 100 == 0:
@@ -166,14 +171,14 @@ class Trainer(object):
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                if iteration % 100 == 0:
+                if iteration % 250 == 0:
                     self.save_model(tf_sess, loss_out)
                     self.sample(tf_sess)
                     self.sample_beam(tf_sess)
 
                 iteration += 1
 
-    def sample(self, sess, max_sample_length=30, num_of_samples=3):
+    def sample(self, sess, max_sample_length=30, num_of_samples=3, min_queries = 3):
 
         for i in range(num_of_samples):
 
@@ -186,9 +191,6 @@ class Trainer(object):
             )
 
             queries_accepted = 0
-            # Min amount of queries to sample
-            min_queries = 3
-
             arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
 
             # Ignore UNK and EOS (for the first min_queries)
@@ -230,10 +232,11 @@ class Trainer(object):
             result = np.array(result).flatten()
             print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
             print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+            print('')
 
-    def sample_beam(self, sess, max_sample_length=30, num_of_samples=3):
+    def sample_beam(self, sess, max_steps=30, num_of_samples=3, beam_size=10, min_queries=2):
 
-        for i in range(num_of_samples):
+        for step in range(num_of_samples):
 
             x_batch, _, seq_len = self.get_batch(self.valid_data)
             input_x = np.expand_dims(x_batch[:-(seq_len / 2), 1], axis=1)
@@ -243,45 +246,38 @@ class Trainer(object):
                 feed_dict={self.X: input_x}
             )
 
-            max_length = 10
-            beam_size = 5
-            original_hypotheses = []
+            current_beam_size = beam_size
+            current_hypotheses = []
             final_hypotheses = []
 
-            # Min amount of queries to sample
-            min_queries = 3
-
+            # Reverse arg sort (highest prob above)
             arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
             arg_sort_i = 0
 
-            # create hypothesis
-            while len(original_hypotheses) < beam_size:
-
-                queries_accepted = 0
-
+            # create original current_hypotheses
+            while len(current_hypotheses) < current_beam_size:
                 # Ignore UNK and EOS (for the first min_queries)
-                while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
-                                arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                while arg_sort[arg_sort_i] == self.hred.unk_symbol or arg_sort[arg_sort_i] == self.hred.eos_symbol:
                     arg_sort_i += 1
 
                 x = arg_sort[arg_sort_i]
                 arg_sort_i += 1
 
-                if x == self.hred.eoq_symbol:
-                    queries_accepted += 1
-
+                queries_accepted = 1 if x == self.hred.eoq_symbol else 0
                 result = [x]
                 prob = softmax_out[0][x]
-                original_hypotheses += [(prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted)]
+                current_hypotheses += [
+                    (prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted)]
 
-            hypotheses = original_hypotheses
-            i = 0
+            # Create hypotheses per step
+            step = 0
+            while current_beam_size > 0 and step <= max_steps:
 
-            while beam_size > 0 and i <= max_length:
+                step += 1
+                next_hypotheses = []
 
-                new_hypotheses = []
-
-                for prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted in hypotheses:
+                # expand all hypotheses
+                for prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted in current_hypotheses:
 
                     softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                         self.step_inference,
@@ -289,60 +285,56 @@ class Trainer(object):
                          self.H_decoder: hidden_decoder}
                     )
 
+                    # Reverse arg sort (highest prob above)
                     arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
                     arg_sort_i = 0
 
-                    new_hypotheses_a = []
+                    expanded_hypotheses = []
 
                     # create hypothesis
-                    while len(new_hypotheses_a) < beam_size:
+                    while len(expanded_hypotheses) < current_beam_size:
 
                         # Ignore UNK and EOS (for the first min_queries)
                         while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
-                                        arg_sort[arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                                        arg_sort[
+                                            arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
                             arg_sort_i += 1
 
                         new_x = arg_sort[arg_sort_i]
                         arg_sort_i += 1
 
-                        new_queries_accepted = queries_accepted
-                        if x == self.hred.eoq_symbol:
-                            new_queries_accepted = queries_accepted + 1
-
+                        new_queries_accepted = queries_accepted + 1 if x == self.hred.eoq_symbol else queries_accepted
                         new_result = result + [new_x]
-                        new_prob = softmax_out[0][new_x]  # + prob
-                        new_hypotheses_a += [(new_prob, new_x, new_result, hidden_query, hidden_session, hidden_decoder, new_queries_accepted)]
+                        new_prob = softmax_out[0][new_x] * prob
 
-                    new_hypotheses += new_hypotheses_a
-                    
-                new_hypotheses = sorted(new_hypotheses, key=lambda x: x[0], reverse=True)
+                        expanded_hypotheses += [(new_prob, new_x, new_result, hidden_query, hidden_session,
+                                                 hidden_decoder, new_queries_accepted)]
 
-                # for prob, _, result, _, _, _, _ in new_hypotheses[:20]:
-                #     result = np.array(result).flatten()
-                #     print('Sample progress (%f): %s' % (prob, ' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+                    next_hypotheses += expanded_hypotheses
 
-                new_hypotheses = new_hypotheses[:beam_size]
-                hypotheses = []
+                # sort hypotheses and remove the least likely
+                next_hypotheses = sorted(next_hypotheses, key=lambda x: x[0], reverse=True)[:current_beam_size]
+                current_hypotheses = []
 
-                for hypothesis in new_hypotheses:
+                for hypothesis in next_hypotheses:
                     _, x, _, _, _, _, queries_accepted = hypothesis
 
                     if x == self.hred.eos_symbol:
                         final_hypotheses += [hypothesis]
-                        beam_size -= 1
+                        current_beam_size -= 1
                     else:
-                        hypotheses += [hypothesis]
+                        current_hypotheses += [hypothesis]
 
-                i += 1
-
-            final_hypotheses += hypotheses
+            final_hypotheses += current_hypotheses
 
             input_x = np.array(input_x).flatten()
-            print('\n\nSample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+            print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
 
             for _, _, result, _, _, _, _ in final_hypotheses:
                 result = np.array(result).flatten()
                 print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+
+            print('')
 
     def save_model(self, sess, loss_out):
         if not math.isnan(loss_out):
