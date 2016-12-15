@@ -1,7 +1,5 @@
 
 from collections import defaultdict
-import numpy as np
-from nltk import ngrams
 import argparse
 import pickle
 import os
@@ -15,7 +13,6 @@ MAX_N = 3
 
 OUTPUT_FILE = './data/output/output.out'
 
-
 SAVE_DIST = True
 MAKE_DIST = True
 
@@ -24,13 +21,13 @@ CUTOF_POINTS = "200,300,1000000000"
 
 def make_ngram_distributions(background_session_file, max_n, output_folder, save_dicts=True):
         n_gram_dist_list = []
-        for n in range(1,max_n+1):
+        for n in range(1, max_n+1):
             dist = make_ngram_distribution(background_session_file, n)
             n_gram_dist_list.append(dist)
             if save_dicts:
                 make_dir(output_folder)
                 file_name = str(n) + 'gram_dist'
-                file_path  = os.path.join(output_folder ,file_name)
+                file_path = os.path.join(output_folder, file_name)
                 pickle.dump(dist, open(file_path + ".p", "wb"))
 
         file_name = 'distribution_array'
@@ -46,14 +43,14 @@ def make_ngram_distribution(bg_session_file, n=3):
         session = session.strip('\n')
         queries = session.strip().split('\t')
         for query in queries:
-            for i in range(0,len(query)-n):
+            for i in range(0, len(query)-n):
                 ngram = query[i:i + n]
                 frequency_dict[ngram] = frequency_dict.get(ngram, 0) + 1
     return frequency_dict
 
 
 def load_ngram_dist(file_path):
-    return pickle.load(open( os.join(file_path , "distribution_array.p", "rb" )))
+    return pickle.load(open(os.join(file_path, "distribution_array.p", "rb")))
 
 
 def prune_dicts(n_gram_distributions, cutoff_points):
@@ -69,6 +66,7 @@ def prune_dicts(n_gram_distributions, cutoff_points):
         sorted_dist = list(reversed(sorted_dist))
 
         if len(sorted_dist) > cuttoff:
+
             sorted_dist = sorted_dist[:cuttoff]
 
         dist = {}
@@ -107,21 +105,22 @@ def txt_to_ngram_idx(file, idx_ngramss, FLAGS, outfile):
                 while idx <= len(query):
                     for n in range(FLAGS.max_n, 0, -1):
                         found_ngram = False
-                        n_gram = query[idx:idx+(n+1)]
-                        dict = idx_ngramss[n-1]
-                        if n_gram in dict:
-                            id = dict[n_gram]
-                            query_list.append(str(id))
+                        n_gram = query[idx:idx+(n)]
+                        _dict = idx_ngramss[n - 1]
+                        if n_gram in _dict:
+                            _id = _dict[n_gram]
+                            query_list.append(str(_id))
                             found_ngram = True
                             idx += n
                             break
-                        if not found_ngram:
-                            query_list.append(str(0))
-                            idx += FLAGS.max_n
+                    if not found_ngram:
+                        query_list.append(str(0))
+                        idx += FLAGS.max_n
                 query = " ".join(query_list)
                 session_list.append(query)
-            session =  "\t".join(session_list) + "\n"
+            session = "\t".join(session_list) + "\n"
             f_out.write(session)
+
 
 def store_dist(n_gram_ids, dist_output_dir):
     output_dir = '/full_dist'
@@ -140,27 +139,27 @@ def main(FLAGS):
 
 
     if FLAGS.make_dist:
+        print ('start making dict')
         n_gram_distributions = make_ngram_distributions(FLAGS.bg_file_path, FLAGS.max_n, FLAGS.dist_output_dir, FLAGS.save_dist)
         pruned_dicts = prune_dicts(n_gram_distributions, FLAGS.cutoff_points)
         n_gram_ids = ngram_to_ids(pruned_dicts)
-        store_dist(n_gram_ids)
-
-        txt_to_ngram_idx('./data/full_data/tr_sessions.ctx', n_gram_ids, FLAGS, './data/output/tr_sessions.out')
-        txt_to_ngram_idx('./data/full_data/val_sessions.ctx', n_gram_ids, FLAGS, './data/output/val_sessions.out')
-
-    else:
-        """
-        WRITE FUNCTION TO LOAD DIST FROM DATA
-        """
-        txt_to_ngram_idx(FLAGS.bg_file_path, n_gram_ids, FLAGS, FLAGS.output_file)
 
 
+        print ('translating n-grams to ids')
+        print ('starting with tr sessions')
 
+        txt_to_ngram_idx('./data/full_data/tr_sessions.ctx', n_gram_ids, FLAGS, './data/output/tr_session.out')
 
+        print ('starting with val sessions')
+        txt_to_ngram_idx('./data/full_data/val_sessions.ctx', n_gram_ids, FLAGS, './data/output/val_session.out')
 
-
+        print ('done!')
 
 if __name__ == '__main__':
+    """
+        Parse the flags, all FLAGS has default parameters
+    """
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--make_dist', type=bool, default=MAKE_DIST,
@@ -184,16 +183,17 @@ if __name__ == '__main__':
     parser.add_argument('--output_file', type=str, default=OUTPUT_FILE,
                         help='Comma')
 
-
-
     FLAGS, unparsed = parser.parse_known_args()
 
+    """
+        Cutoffpoints are the points where we cut off the distribution, and go over the next ngram distribution,
+    """
     if FLAGS.cutoff_points:
 
         cutoff_points = FLAGS.cutoff_points.split(",")
         FLAGS.cutoff_points = [int(cutoff_point) for cutoff_point in cutoff_points]
 
-        if not len(FLAGS.cutoff_points) ==  FLAGS.max_n :
+        if not len(FLAGS.cutoff_points) == FLAGS.max_n:
             print ("not enough or to much cutoff points")
             sys.exit()
 
