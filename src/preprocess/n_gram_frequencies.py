@@ -6,7 +6,9 @@ import os
 import operator
 import sys
 
-
+"""
+Make n-gram freq
+"""
 BG_FILE_PATH = './data/full_data/bg_session.ctx'
 DIST_OUTPUT_FOLDER = './data/output/ngram_dist'
 MAX_N = 3
