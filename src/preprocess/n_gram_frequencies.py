@@ -104,11 +104,8 @@ def prune_dicts(n_gram_distributions, cutoff_points):
     for idx in range(0, len(n_gram_distributions)):
         dist = n_gram_distributions[idx]
         cuttoff = cutoff_points[idx]
+        dist_list.append(dist.most_common(cuttoff))
 
-        if len(dist) > cuttoff:
-            dist_list.append(dist.most_common(cuttoff))
-        else:
-            dist_list.append(dist)
     return dist_list
 
 
@@ -117,7 +114,7 @@ def make_dir(file_path):
     make a dir for in the input path
     :param file_path:
     :return:
-    """ 
+    """
     if not os.path.exists(file_path):
         os.makedirs(file_path)
 
