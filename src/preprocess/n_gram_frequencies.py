@@ -117,7 +117,7 @@ def make_dir(file_path):
     make a dir for in the input path
     :param file_path:
     :return:
-    """
+    """ 
     if not os.path.exists(file_path):
         os.makedirs(file_path)
 
@@ -132,7 +132,7 @@ def ngram_to_ids(pruned_dicts, FLAGS):
     vocab = {'<unk>': 0, '</q>': 1, '</s>': 2}
     for dict in pruned_dicts:
         for idx, key in enumerate(dict):
-            vocab[key] = len(vocab)
+            vocab[key[0]] = len(vocab)
         filename = FLAGS.dist_output_dir + "/ngram-vocab.dict.pkl"
     safe_pickle(vocab, filename)
 
@@ -177,6 +177,9 @@ def store_dist(n_gram_ids, dist_output_dir):
     pickle.dump(n_gram_ids, open(output_dir + '/full-ngram_dist.p', "wb"))
 
 
+
+
+
 def main(FLAGS):
     """
     :param make_dist:
@@ -192,10 +195,11 @@ def main(FLAGS):
         print ('translating n-grams to ids')
         print ('starting with tr sessions')
 
-        txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
+        txt_to_ngram_idx('./data/test', vocab, FLAGS, './data/output/tr_session.out')
+        #txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
 
         print ('starting with val sessions')
-        txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
+        #txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
 
         print ('done!')
 
