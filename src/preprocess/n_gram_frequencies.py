@@ -5,7 +5,9 @@ import pickle
 import os
 import operator
 import sys
-
+import logging
+from collections import Counter
+import cPickle
 """
 Make n-gram freq
 """
@@ -21,34 +23,67 @@ MAKE_DIST = True
 CUTOF_POINTS = "200,300,1000000000"
 
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('text2dict')
+
+
+def safe_pickle(obj, filename):
+    """
+    :param obj:
+    :param filename:
+    :return:  Nothimg, cPickels the objects
+    """
+    if os.path.isfile(filename):
+        logger.info("Overwriting %s." % filename)
+    else:
+        logger.info("Saving to %s." % filename)
+    with open(filename, 'wb') as f:
+        cPickle.dump(obj, f, protocol=cPickle.HIGHEST_PROTOCOL)
+
+
 def make_ngram_distributions(background_session_file, max_n, output_folder, save_dicts=True):
+        """
+
+        :param background_session_file:
+        :param max_n:
+        :param output_folder:
+        :param save_dicts:
+        :return: List with n, n-gram distribution saved in a dict per distribtuin
+        """
         n_gram_dist_list = []
         for n in range(1, max_n+1):
-            dist = make_ngram_distribution(background_session_file, n)
-            n_gram_dist_list.append(dist)
+            cnt = make_ngram_distribution(background_session_file, n)
+            n_gram_dist_list.append(cnt)
             if save_dicts:
                 make_dir(output_folder)
                 file_name = str(n) + 'gram_dist'
                 file_path = os.path.join(output_folder, file_name)
-                pickle.dump(dist, open(file_path + ".p", "wb"))
+                safe_pickle(cnt, file_path)
 
         file_name = 'distribution_array'
         file_path = os.path.join(output_folder, file_name)
+        safe_pickle(n_gram_dist_list, file_path)
 
-        pickle.dump(n_gram_dist_list, open(file_path, "wb"))
         return n_gram_dist_list
 
 
 def make_ngram_distribution(bg_session_file, n=3):
-    frequency_dict = defaultdict()
+    """
+    :param bg_session_file:
+    :param n:
+    :return: A dict with per n-gram in the bg-set, the frequency of that n-gram
+    """
+
+    cnt = Counter()
     for session in open(bg_session_file, 'r'):
         session = session.strip('\n')
         queries = session.strip().split('\t')
         for query in queries:
-            for i in range(0, len(query)-n):
+            for i in range(0, len(query)-n + 1):
                 ngram = query[i:i + n]
-                frequency_dict[ngram] = frequency_dict.get(ngram, 0) + 1
-    return frequency_dict
+                cnt[ngram] += 1
+
+    return cnt
 
 
 def load_ngram_dist(file_path):
@@ -56,6 +91,12 @@ def load_ngram_dist(file_path):
 
 
 def prune_dicts(n_gram_distributions, cutoff_points):
+    """
+    Function that cuttoff infrequent n-grams, based on the default settings, otherwise take default input
+    :param n_gram_distributions:
+    :param cutoff_points:
+    :return:
+    """
 
     n_gram_distributions = list(reversed(n_gram_distributions))
     dist_list = []
@@ -64,43 +105,46 @@ def prune_dicts(n_gram_distributions, cutoff_points):
         dist = n_gram_distributions[idx]
         cuttoff = cutoff_points[idx]
 
-        sorted_dist = sorted(dist.items(), key=operator.itemgetter(1))
-        sorted_dist = list(reversed(sorted_dist))
-
-        if len(sorted_dist) > cuttoff:
-
-            sorted_dist = sorted_dist[:cuttoff]
-
-        dist = {}
-
-        for key, value in sorted_dist:
-            dist[key] = value
-        dist_list.append(dist)
+        if len(dist) > cuttoff:
+            dist_list.append(dist.most_common(cuttoff))
+        else:
+            dist_list.append(dist)
     return dist_list
 
 
 def make_dir(file_path):
+    """
+    make a dir for in the input path
+    :param file_path:
+    :return:
+    """
     if not os.path.exists(file_path):
         os.makedirs(file_path)
 
 
-def ngram_to_ids(pruned_dicts):
-    lst = []
+def ngram_to_ids(pruned_dicts, FLAGS):
+    """
+    map n-grams to ID's
+    :param pruned_dicts:
+    :return: returns a list, with the dicts
+    """
+
+    vocab = {'<unk>': 0, '</q>': 1, '</s>': 2}
     for dict in pruned_dicts:
-        _dict = {}
-        for idx,key in enumerate(dict.keys()):
-            _dict[key] = idx + 1
-        lst.append(_dict)
-    return lst
+        for idx, key in enumerate(dict):
+            vocab[key] = len(vocab)
+        filename = FLAGS.dist_output_dir + "/ngram-vocab.dict.pkl"
+    safe_pickle(vocab, filename)
+
+    return vocab
 
 
-def txt_to_ngram_idx(file, idx_ngramss, FLAGS, outfile):
+def txt_to_ngram_idx(file, vocab, FLAGS, outfile):
     with open(outfile, 'w') as f_out:
         for session in open(file, 'r'):
             session_list = []
             session = session.strip('\n')
             queries = session.strip().split('\t')
-            idx_ngramss = idx_ngramss[::-1]
             for query in queries:
                 idx = 0
                 query_list = []
@@ -108,14 +152,16 @@ def txt_to_ngram_idx(file, idx_ngramss, FLAGS, outfile):
                     for n in range(FLAGS.max_n, 0, -1):
                         found_ngram = False
                         n_gram = query[idx:idx+(n)]
-                        _dict = idx_ngramss[n - 1]
-                        if n_gram in _dict:
-                            _id = _dict[n_gram]
+                        if n_gram in vocab:
+                            _id = vocab[n_gram]
                             query_list.append(str(_id))
                             found_ngram = True
                             idx += n
                             break
                     if not found_ngram:
+                        """
+                        Unkown words get a zero ID
+                        """
                         query_list.append(str(0))
                         idx += FLAGS.max_n
                 query = " ".join(query_list)
@@ -131,29 +177,25 @@ def store_dist(n_gram_ids, dist_output_dir):
     pickle.dump(n_gram_ids, open(output_dir + '/full-ngram_dist.p', "wb"))
 
 
-
-
 def main(FLAGS):
     """
     :param make_dist:
     :return:
     """
 
-
     if FLAGS.make_dist:
         print ('start making dict')
         n_gram_distributions = make_ngram_distributions(FLAGS.bg_file_path, FLAGS.max_n, FLAGS.dist_output_dir, FLAGS.save_dist)
         pruned_dicts = prune_dicts(n_gram_distributions, FLAGS.cutoff_points)
-        n_gram_ids = ngram_to_ids(pruned_dicts)
-
+        vocab = ngram_to_ids(pruned_dicts, FLAGS)
 
         print ('translating n-grams to ids')
         print ('starting with tr sessions')
 
-        txt_to_ngram_idx('./data/full_data/tr_sessions.ctx', n_gram_ids, FLAGS, './data/output/tr_session.out')
+        txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
 
         print ('starting with val sessions')
-        txt_to_ngram_idx('./data/full_data/val_sessions.ctx', n_gram_ids, FLAGS, './data/output/val_session.out')
+        txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
 
         print ('done!')
 
@@ -191,7 +233,6 @@ if __name__ == '__main__':
         Cutoffpoints are the points where we cut off the distribution, and go over the next ngram distribution,
     """
     if FLAGS.cutoff_points:
-
         cutoff_points = FLAGS.cutoff_points.split(",")
         FLAGS.cutoff_points = [int(cutoff_point) for cutoff_point in cutoff_points]
 
