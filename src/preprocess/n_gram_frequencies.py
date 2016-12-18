@@ -86,8 +86,8 @@ def make_ngram_distribution(bg_session_file, n=3):
     return cnt
 
 
-def load_ngram_dist(file_path):
-    return pickle.load(open(os.join(file_path, "distribution_array.p", "rb")))
+def load_vocab(FLAGS):
+    return pickle.load(open(os.path.join(FLAGS.dist_output_dir, "ngram-vocab.dict.pkl"), "rb"))
 
 
 def prune_dicts(n_gram_distributions, cutoff_points):
@@ -174,31 +174,30 @@ def store_dist(n_gram_ids, dist_output_dir):
     pickle.dump(n_gram_ids, open(output_dir + '/full-ngram_dist.p', "wb"))
 
 
-
-
-
 def main(FLAGS):
     """
     :param make_dist:
     :return:
     """
 
-    if FLAGS.make_dist:
-        print ('start making dict')
+    if FLAGS.make_dist is "True":
+        print ('start making dist')
         n_gram_distributions = make_ngram_distributions(FLAGS.bg_file_path, FLAGS.max_n, FLAGS.dist_output_dir, FLAGS.save_dist)
         pruned_dicts = prune_dicts(n_gram_distributions, FLAGS.cutoff_points)
         vocab = ngram_to_ids(pruned_dicts, FLAGS)
+    else:
+        print ('load dist from memory')
+        vocab = load_vocab(FLAGS)
+    print ('translating n-grams to ids')
+    print ('starting with tr sessions')
 
-        print ('translating n-grams to ids')
-        print ('starting with tr sessions')
+    # txt_to_ngram_idx('./data/test', vocab, FLAGS, './data/output/tr_session.out')
+    #txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
 
-        txt_to_ngram_idx('./data/test', vocab, FLAGS, './data/output/tr_session.out')
-        txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
+    print ('starting with val sessions')
+    txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
 
-        print ('starting with val sessions')
-        txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
-
-        print ('done!')
+    print ('done!')
 
 if __name__ == '__main__':
     """
@@ -207,7 +206,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--make_dist', type=bool, default=MAKE_DIST,
+    parser.add_argument('--make_dist', type=str, default=MAKE_DIST,
                         help='Make a distribution of the ngrams in the background data set')
 
     parser.add_argument('--bg_file_path', type=str, default=BG_FILE_PATH,
