@@ -99,20 +99,21 @@ class Trainer(object):
 
         self.X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
         self.Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
+        self.attention_mask = tf.placeholder(tf.float32, shape=(max_length, batch_size, max_length))
 
         self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
         self.H_query = tf.placeholder(tf.float32, shape=(None, batch_size, self.hred.query_dim))
         self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
         self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
 
-        self.logits = self.hred.step_through_session(self.X)
+        self.logits = self.hred.step_through_session(self.X, self.attention_mask)
         self.loss = self.hred.loss(self.X, self.logits, self.Y)
         self.softmax = self.hred.softmax(self.logits)
         self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
         self.session_inference = self.hred.step_through_session(
-             self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+             self.X, self.attention_mask, return_softmax=True, return_last_with_hidden_states=True, reuse=True
         )
         self.step_inference = self.hred.single_step(
              self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
@@ -136,27 +137,39 @@ class Trainer(object):
                 mask = np.where(query == eoq_symbol, 0, mask)
                 return mask.reshape(1, (len(mask)))
 
-        eoq_mask = np.where(X == float(EOQ_SYMBOL), 1., 0.)
+        # eoq_mask = np.where(X == float(EOQ_SYMBOL), float(EOQ_SYMBOL), 0.)
         first_query = True
 
         for i in range(X.shape[1]): #  loop over batch size --> this gives 80 queries
-            query = eoq_mask[:, i] #X[:, i]
+            query = X[:, i] #eoq_mask[:, i] #X[:, i]
             #print("query", query)
 
             first = True
             last_seen_eoq_pos = -1
             for w_pos in range(len(query)):
+                # if query[w_pos] == float(EOQ_SYMBOL):
+                #     if first:
+                #         query_masks = make_mask(-1, query, float(EOQ_SYMBOL))
+                #         first = False
+                #     else:
+                #         new_mask = make_mask(-1, query, float(EOQ_SYMBOL))
+                #         query_masks = np.concatenate((query_masks, new_mask), axis=0)
+                #     last_seen_eoq_pos = w_pos
+                # else:
+                #     new_mask = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
+                #     query_masks = np.concatenate((query_masks, new_mask), axis=0)
                 if query[w_pos] == float(EOQ_SYMBOL):
-                    if first:
-                        query_masks = make_mask(-1, query, float(EOQ_SYMBOL))
-                        first = False
-                    else:
-                        new_mask = make_mask(-1, query, float(EOQ_SYMBOL))
-                        query_masks = np.concatenate((query_masks, new_mask), axis=0)
                     last_seen_eoq_pos = w_pos
+
+                if first:
+                    query_masks = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
+                    first = False
                 else:
                     new_mask = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
                     query_masks = np.concatenate((query_masks, new_mask), axis=0)
+
+            print("query masks", query_masks)
+
 
             if first_query:
                 batch_masks = query_masks
@@ -199,7 +212,7 @@ class Trainer(object):
                 if iteration % 10 == 0:
                     loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
                         [self.loss, self.optimizer.optimize_op, self.accuracy, self.non_symbol_accuracy],
-                        {self.X: x_batch, self.Y: y_batch}
+                        {self.X: x_batch, self.Y: y_batch, self.attention_mask: attention_mask}
                     )
 
                     # Accumulative cost, like in hred-qs
@@ -213,7 +226,7 @@ class Trainer(object):
                 else:
                     loss_out, _ = tf_sess.run(
                         [self.loss, self.optimizer.optimize_op],
-                        {self.X: x_batch, self.Y: y_batch}
+                        {self.X: x_batch, self.Y: y_batch, self.attention_mask: attention_mask}
                     )
 
                     # Accumulative cost, like in hred-qs
@@ -235,12 +248,12 @@ class Trainer(object):
                 # Sumerize
                 if iteration % 10 == 0:
                 #if iteration % 100 == 0:
-                    summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch})
+                    summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch, self.attention_mask: attention_mask})
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                if iteration % 2 == 0:
-                     self.sample(tf_sess)
+                # if iteration % 2 == 0:
+                     # self.sample(tf_sess)
                 #     self.sample_beam(tf_sess)
 
                 iteration += 1

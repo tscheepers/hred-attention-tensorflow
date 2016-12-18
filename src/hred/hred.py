@@ -39,7 +39,7 @@ class HRED():
         mask = [1, 2, 3, 4]
         return tf.Variable(mask)
 
-    def step_through_session(self, X, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
+    def step_through_session(self, X, attention_mask, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
@@ -139,7 +139,10 @@ class HRED():
         # query_decoder_T = tf.transpose(decoder, perm=[1, 0, 2])
 
         # expand to num_of_steps x batch_size x num_of_steps x query_dim
+
         query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder, 2), (1, 1, num_of_steps, 1))
+
+        query_encoder_expanded = query_encoder_expanded * tf.tile(tf.expand_dims(attention_mask, 3), (1, 1, 1, self.query_dim))
 
         flatten_decoder_with_attention = \
             layers.attention(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
