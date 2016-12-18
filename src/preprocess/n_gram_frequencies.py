@@ -8,17 +8,18 @@ import sys
 import logging
 from collections import Counter
 import cPickle
+import itertools
 """
 Make n-gram freq
 """
 BG_FILE_PATH = './data/full_data/bg_session.ctx'
-DIST_OUTPUT_FOLDER = './data/output/ngram_dist'
+DIST_OUTPUT_FOLDER = './data/output'
 MAX_N = 3
 
 OUTPUT_FILE = './data/output/output.out'
 
 SAVE_DIST = True
-MAKE_DIST = True
+MAKE_DIST = "True"
 
 CUTOF_POINTS = "200,300,1000000000"
 
@@ -54,15 +55,6 @@ def make_ngram_distributions(background_session_file, max_n, output_folder, save
         for n in range(1, max_n+1):
             cnt = make_ngram_distribution(background_session_file, n)
             n_gram_dist_list.append(cnt)
-            if save_dicts:
-                make_dir(output_folder)
-                file_name = str(n) + 'gram_dist'
-                file_path = os.path.join(output_folder, file_name)
-                safe_pickle(cnt, file_path)
-
-        file_name = 'distribution_array'
-        file_path = os.path.join(output_folder, file_name)
-        safe_pickle(n_gram_dist_list, file_path)
 
         return n_gram_dist_list
 
@@ -127,21 +119,31 @@ def ngram_to_ids(pruned_dicts, FLAGS):
     """
 
     vocab = {'<unk>': 0, '</q>': 1, '</s>': 2}
+    train_dict = [('<unk>', 0,0), ('</q>', 1,0), ('</s>', 2,0)]
     for dict in pruned_dicts:
         for idx, key in enumerate(dict):
-            vocab[key[0]] = len(vocab)
-        filename = FLAGS.dist_output_dir + "/ngram-vocab.dict.pkl"
+            id = len(vocab)
+            vocab[key[0]] = id
+            train_dict.append((key[0], id, key[1]))
+
+
+    filename = os.path.join(FLAGS.dist_output_dir, "ngram-vocab.dict.pkl")
     safe_pickle(vocab, filename)
+
+    filename = os.path.join(FLAGS.dist_output_dir, "train.dict.pkl")
+    safe_pickle(train_dict, filename)
 
     return vocab
 
 
-def txt_to_ngram_idx(file, vocab, FLAGS, outfile):
-    with open(outfile, 'w') as f_out:
+def txt_to_ngram_idx(file, vocab, FLAGS, outfile_txt, outfile_bin):
+    binarized_corpus = []
+    with open(outfile_txt, 'w') as f_out:
         for session in open(file, 'r'):
-            session_list = []
             session = session.strip('\n')
             queries = session.strip().split('\t')
+            session_list = []
+            bin_session_list = []
             for query in queries:
                 idx = 0
                 query_list = []
@@ -161,10 +163,21 @@ def txt_to_ngram_idx(file, vocab, FLAGS, outfile):
                         """
                         query_list.append(str(0))
                         idx += FLAGS.max_n
+
                 query = " ".join(query_list)
                 session_list.append(query)
+
+                query_list.append(1)
+                bin_session_list.append(query_list)
+
+            bin_session_list.append([2])
+            bin_session_list = list(itertools.chain(*bin_session_list))
+            binarized_corpus.append(bin_session_list)
+
             session = "\t".join(session_list) + "\n"
             f_out.write(session)
+
+    safe_pickle(binarized_corpus, outfile_bin)
 
 
 def store_dist(n_gram_ids, dist_output_dir):
@@ -191,13 +204,14 @@ def main(FLAGS):
     print ('translating n-grams to ids')
     print ('starting with tr sessions')
 
-    # txt_to_ngram_idx('./data/test', vocab, FLAGS, './data/output/tr_session.out')
-    #txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
+    #txt_to_ngram_idx('./data/test', vocab, FLAGS, './data/output/test.out', './data/output/test.ses.pkl')
+    txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out','./data/output/train.ses.pkl')
 
     print ('starting with val sessions')
-    txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
+    txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out', './data/output/val.ses.pkl')
 
     print ('done!')
+
 
 if __name__ == '__main__':
     """
