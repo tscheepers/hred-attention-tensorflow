@@ -16,7 +16,8 @@ import cPickle
 import tqdm
 
 
-# TODO: need to skip a query if all query words are unknown
+
+#TODO: need to skip a query if all query words are unknown
 
 AOL_ROOT_PATH = 'AOL-user-ct-collection'
 AOL_TAR_FILE = 'aol-data.tar'
@@ -73,7 +74,7 @@ def load_vocab_without_freq(vocab_file):
 
 
 def load_vocab(vocab_file):
-
+    print vocab_file
     assert os.path.isfile(vocab_file)
     vocab = dict([(x[0], x[1]) for x in cPickle.load(open(vocab_file, "r"))])
     # Check consistency
@@ -552,6 +553,54 @@ class Processor:
                 # notice the statistics at the end of each file
                 logger.info("INFO - Converted %d sessions" % session_c)
 
+
+    def translate_ngrams_to_indeces(self,session_file='data/train.sess', n=3):
+
+        vocab = {'<unk>': 0, '</q>': 1, '</s>': 2, '</p>': 3}
+        seen_queries = [] # prevent that we proces query more than one
+        n_gram_id = 4
+
+        for line in open(session_file, 'r'):
+            line = line.strip('\n')
+            queries = line.split('\t')
+            for query in queries:
+                if query not in seen_queries:
+                    seen_queries.append(query)
+                    n_grams = [query[i:i + n] for i in range(0, len(query), n) if query[i:i + n] not in vocab]
+                    for n_gram in n_grams:
+                        if len(n_gram) < 3:
+                            n_gram = n_gram.ljust(3 - len(n_gram))
+                        if n_gram not in vocab:
+                            vocab[n_gram] = n_gram_id
+                            n_gram_id += 1
+        self.make_ngram_train_file(session_file, vocab)
+
+
+
+    def make_ngram_train_file(self, session_file, vocab, outfile='n_gram_output',n=3):
+        with open(outfile, 'w') as f_out:
+            for line in open(session_file, 'r'):
+                line = line.strip('\n')
+                session_array = []
+                queries = line.strip().split('\t')
+                for query in queries:
+                    query_array = []
+                    n_grams = [query[i:i + n] for i in range(0, len(query), n)]
+                    for n_gram in n_grams:
+                        if len(n_gram) < 3:
+                            n_gram = n_gram.ljust(3 - len(n_gram))
+                        id = vocab[n_gram]
+                        query_array.append(str(id))
+                    query_string  = " ".join(query_array)
+                    session_array.append(query_string)
+
+                f_out.write("\t".join(session_array) + "\n")
+
+
+
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", type=str, default=AOL_ROOT_PATH,
@@ -563,6 +612,9 @@ if __name__ == '__main__':
     parser.add_argument("--vocab_file", type=str, default=VOCAB_FILENAME,
                         help="External dictionary (pkl file)")
     parser.add_argument("--output", type=str, help="Output file")
+
+    parser.add_argument("--ngrams", type=str, help="Make ngrams", default='True')
+
     parser.add_argument("--make_vocab", action='store_true', help="Boolean whether or not to generate vocabulary")
 
     args = parser.parse_args()
@@ -573,7 +625,13 @@ if __name__ == '__main__':
 
     # generates the 4 session files (and corresponding rank file) for background, train, test, validation
     # p.execute()
-    p.translate_words_to_indices(final_proc_options=['bg', 'tr', 'val', 'test'])
+    if args.ngrams =='False':
+        p.translate_words_to_indices(final_proc_options=['bg'])
+    else:
+        print ('make n-grams vocab')
+        p.translate_ngrams_to_indeces(session_file='data/train.ses')
+
+
     # p.load_bg_session(DEFAULT_OUT_PATH + "bg_session.ctx")
     # vocab = load_vocab(os.path.join(DEFAULT_OUT_PATH, args.vocab_file))
     # vocab = load_vocab(vocab_file)
