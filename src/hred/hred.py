@@ -107,11 +107,41 @@ class HRED():
         flatten_embedder = tf.reshape(embedder, (-1, self.embedding_dim))
         # flatten_session_encoder = tf.reshape(session_encoder, (-1, self.session_dim))
 
+        # attention
+
+        # expand to batch_size x num_of_steps x query_dim
+        query_encoder_T = tf.transpose(query_encoder, perm=[1, 0, 2])
+        query_decoder_T = tf.transpose(decoder, perm=[1, 0, 2])
+
+        # expand to batch_size x num_of_steps x num_of_steps x query_dim
+        query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder_T, 2), (1, 1, num_of_steps, 1))
+
+        # flatten for eventual multiplication (batch_size + num_of_steps + num_of_steps) x (query_dim)
+        flatten_query_encoder_expanded = tf.reshape(query_encoder_expanded, (-1, self.query_dim))
+        # (batch_size + num_of_steps) x (decoder_dim)
+        flatten_decoder_T =  tf.reshape(query_decoder_T, (-1, self.decoder_dim))
+
+        # decoder_dim x query_dim
+        W = tf.get_variable(name='weight', shape=(self.decoder_dim, self.query_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+
+        # (batch_size + num_of_steps) x (batch_size + num_of_steps + num_of_steps)
+        flatten_score = tf.matmul(flatten_decoder_T, tf.matmul(W, flatten_query_encoder_expanded.T))
+
+        # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
+        score = tf.reshape(flatten_score, (num_of_steps * batch_size, num_of_steps * batch_size, num_of_steps))
+
+        # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
+        a = tf.nn.softmax(score)
+
+        context = tf.reduce_sum(a * query_encoder_expanded, 2)
+
+        flatten_decoder_with_attention = np.append(context, flatten_decoder, 1)
+
         output_layer = layers.output_layer(
             flatten_embedder,
-            flatten_decoder,
+            flatten_decoder_with_attention,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim,
+            h_dim=self.decoder_dim + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )
