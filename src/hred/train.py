@@ -100,10 +100,10 @@ class Trainer(object):
         self.X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
         self.Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
 
-        # self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
-        # self.H_query = tf.placeholder(tf.float32, shape=(batch_size, self.hred.query_dim))
-        # self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
-        # self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
+        self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
+        self.H_query = tf.placeholder(tf.float32, shape=(None, batch_size, self.hred.query_dim))
+        self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
+        self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
 
         self.logits = self.hred.step_through_session(self.X)
         self.loss = self.hred.loss(self.X, self.logits, self.Y)
@@ -111,12 +111,12 @@ class Trainer(object):
         self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
-        # self.session_inference = self.hred.step_through_session(
-        #     self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
-        # )
-        # self.step_inference = self.hred.single_step(
-        #     self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
-        # )
+        self.session_inference = self.hred.step_through_session(
+             self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+        )
+        self.step_inference = self.hred.single_step(
+             self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
+        )
 
         self.optimizer = Optimizer(self.loss)
         self.summary = tf.merge_all_summaries()
@@ -190,8 +190,8 @@ class Trainer(object):
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                # if iteration % 250 == 0:
-                #     self.sample(tf_sess)
+                if iteration % 2 == 0:
+                     self.sample(tf_sess)
                 #     self.sample_beam(tf_sess)
 
                 iteration += 1
@@ -230,7 +230,7 @@ class Trainer(object):
                     {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
                      self.H_decoder: hidden_decoder}
                 )
-
+                print("INFO -- Sample hidden states", tf.shape(hidden_query))
                 arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
 
                 # Ignore UNK and EOS (for the first min_queries)
