@@ -104,13 +104,11 @@ def output_layer(x, h, name='output', x_dim=256, y_dim=512, h_dim=512, reuse=Non
     return y
 
 
-def output_layer_with_state_bias(x_packed, name='output', x_dim=256, y_dim=512, h_dim=512, s_dim=512, reuse=None):
+def output_layer_with_state_bias(x, h, state, name='output', x_dim=256, y_dim=512, h_dim=512, s_dim=512, reuse=None):
     """
     Used after the decoder
     This is used for "full" state bias in the decoder which we did not use in the end.
     """
-
-    h, x, state, = x_packed
 
     with tf.variable_scope(name, reuse=reuse):
         Wh = tf.get_variable(name='weight_hidden', shape=(h_dim, y_dim), initializer=tf.random_normal_initializer(stddev=0.01))
@@ -178,6 +176,7 @@ def _gru_layer(h_prev, x, name='gru', x_dim=256, y_dim=512, reuse=None):
 
     return h
 
+
 def _rnn_layer(h_prev, x, name='rnn', x_dim=256, y_dim=512, reuse=None):
     """
     Used for both encoder layers,
@@ -193,6 +192,7 @@ def _rnn_layer(h_prev, x, name='rnn', x_dim=256, y_dim=512, reuse=None):
         h = tf.tanh(tf.matmul(x, Wi) + tf.matmul(h_prev, Wh) + b)
 
     return h
+
 
 def _gru_layer_with_state_bias(h_prev, x, state, name='gru', x_dim=256, y_dim=1024, s_dim=512, reuse=None):
     """

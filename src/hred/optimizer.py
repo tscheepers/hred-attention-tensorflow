@@ -32,7 +32,7 @@ class Optimizer(object):
         #     initial_learning_rate, self.global_step, num_steps_per_decay,
         #     decay_rate, staircase=True)
 
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001, epsilon=1e-6)
 
         # optimizer = tf.train.RMSPropOptimizer(learning_rate=0.0001, decay=0.95, momentum=0.9, epsilon=1e-6)
 
