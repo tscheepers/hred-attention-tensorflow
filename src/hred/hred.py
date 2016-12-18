@@ -29,6 +29,16 @@ class HRED():
         self.eoq_symbol = eoq_symbol  # End of Query symbol
         self.eos_symbol = eos_symbol  # End of Session symbol
 
+    # def seen_eoq(self):
+    #     return tf.ones(shape=[1, 5])
+    #
+    # def not_seen_eoq(self):
+    #     return tf.zeros(shape=[1, 5])
+
+    def make_attention_mask(self, eoq=False):
+        mask = [1, 2, 3, 4]
+        return tf.Variable(mask)
+
     def step_through_session(self, X, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
@@ -47,6 +57,21 @@ class HRED():
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
         eoq_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
+
+        # eoq mask has size [MAX LEN x BATCH SIZE] --> we want to loop over batch size
+        # print(eoq_mask)
+
+        # BATCH_SIZE = 80
+        # MAX_LEN = 50  # TODO: this shouldn't be as local
+        # for b in range(BATCH_SIZE):
+        #     for qw in range(MAX_LEN):
+        #         condition = tf.not_equal(eoq_mask[qw, b], 0, name='condition') # if not equal to zero --> then its not an eoq symbol
+        #         # print(condition)
+        #         # print(condition[0])
+        #         a = tf.cond(condition[0], lambda: self.make_attention_mask(eoq=False), lambda: self.make_attention_mask(eoq=True))
+        #         #print(a)
+
+
 
         # Computes the encoded query state. The tensorflow scan function repeatedly applies the gru_layer_with_reset
         # function to (embedder, eoq_mask) and it initialized the gru layer with the zero tensor.

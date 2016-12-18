@@ -19,7 +19,7 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = True
+RESTORE = False
 
 N_BUCKETS = 20
 MAX_ITTER = 20
@@ -124,6 +124,52 @@ class Trainer(object):
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
 
+    def make_attention_mask(self, X):
+
+        def make_mask(last_seen_eoq_pos, query, eoq_symbol):
+
+            if last_seen_eoq_pos == -1:
+                return np.zeros((1, len(query)))
+            else:
+                mask = np.ones([len(query)])
+                mask[last_seen_eoq_pos:] = 0.
+                mask = np.where(query == eoq_symbol, 0, mask)
+                return mask.reshape(1, (len(mask)))
+
+        eoq_mask = np.where(X == float(EOQ_SYMBOL), 1., 0.)
+        first_query = True
+
+        for i in range(X.shape[1]): #  loop over batch size --> this gives 80 queries
+            query = eoq_mask[:, i] #X[:, i]
+            #print("query", query)
+
+            first = True
+            last_seen_eoq_pos = -1
+            for w_pos in range(len(query)):
+                if query[w_pos] == float(EOQ_SYMBOL):
+                    if first:
+                        query_masks = make_mask(-1, query, float(EOQ_SYMBOL))
+                        first = False
+                    else:
+                        new_mask = make_mask(-1, query, float(EOQ_SYMBOL))
+                        query_masks = np.concatenate((query_masks, new_mask), axis=0)
+                    last_seen_eoq_pos = w_pos
+                else:
+                    new_mask = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
+                    query_masks = np.concatenate((query_masks, new_mask), axis=0)
+
+            if first_query:
+                batch_masks = query_masks
+                first_query = False
+            else:
+                batch_masks = np.dstack((batch_masks, query_masks))
+
+        batch_masks = np.transpose(batch_masks, (0, 2, 1))
+        # print("shape batch masks", batch_masks.shape)
+        # print("batch masks:", batch_masks)
+
+        return batch_masks  # = attention masks
+
     def train(self, max_epochs=1000, max_length=50, batch_size=80):
 
         # Add an op to initialize the variables.
@@ -146,6 +192,9 @@ class Trainer(object):
             for iteration in range(MAX_ITTER):
 
                 x_batch, y_batch, seq_len = self.get_batch(self.train_data)
+
+                attention_mask = self.make_attention_mask(x_batch)
+                print("attention mask", attention_mask)
 
                 if iteration % 10 == 0:
                     loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
@@ -190,7 +239,8 @@ class Trainer(object):
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                if iteration % 250 == 0:
+                # if iteration % 250 == 0:
+                if iteration % 5 == 0:
                     self.sample(tf_sess)
                     self.sample_beam(tf_sess)
 
