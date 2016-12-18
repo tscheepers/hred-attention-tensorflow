@@ -145,7 +145,7 @@ class HRED():
         query_encoder_expanded = query_encoder_expanded * tf.tile(tf.expand_dims(attention_mask, 3), (1, 1, 1, self.query_dim))
 
         flatten_decoder_with_attention = \
-            layers.attention(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+            layers.attention_session(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
                              reuse=reuse)
 
         output_layer = layers.output_layer(
@@ -245,13 +245,13 @@ class HRED():
         # add attention layer
         # expand to num_of_steps x batch_size x num_of_steps x query_dim
         num_of_atten_states = tf.shape(prev_hidden_query_states)[0]
-        tf.Print(num_of_atten_states, [num_of_atten_states], "INFO - single-step ")
-        tf.Print(flatten_decoder, [tf.shape(flatten_decoder)], "INFO - decoder.shape ")
-        query_encoder_expanded = tf.tile(tf.expand_dims(prev_hidden_query_states, 2), (1, 1, num_of_atten_states, 1))
+        # tf.Print(num_of_atten_states, [num_of_atten_states], "INFO - single-step ")
+        # tf.Print(flatten_decoder, [tf.shape(flatten_decoder)], "INFO - decoder.shape ")
+        query_encoder_expanded = tf.transpose(prev_hidden_query_states, [1, 0, 2])
 
         flatten_decoder_with_attention = \
-            layers.attention(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
-                             reuse=reuse)
+            layers.attention_step(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+                                  reuse=reuse)
 
         # After the decoder we add an additional output layer
         output = layers.output_layer(
@@ -273,7 +273,7 @@ class HRED():
 
         softmax = self.softmax(logits)
 
-        return softmax, hidden_query, hidden_session, hidden_decoder
+        return softmax, tf.concat(0, [prev_hidden_query_states, tf.expand_dims(hidden_query, 0)]), hidden_session, hidden_decoder
 
     def softmax(self, logits):
         """

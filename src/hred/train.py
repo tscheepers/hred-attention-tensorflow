@@ -168,9 +168,6 @@ class Trainer(object):
                     new_mask = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
                     query_masks = np.concatenate((query_masks, new_mask), axis=0)
 
-            print("query masks", query_masks)
-
-
             if first_query:
                 batch_masks = query_masks
                 first_query = False
@@ -207,7 +204,6 @@ class Trainer(object):
                 x_batch, y_batch, seq_len = self.get_batch(self.train_data)
 
                 attention_mask = self.make_attention_mask(x_batch)
-                print("attention mask", attention_mask)
 
                 if iteration % 10 == 0:
                     loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
