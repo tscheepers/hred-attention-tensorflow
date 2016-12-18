@@ -19,7 +19,7 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = True
+RESTORE = False
 
 N_BUCKETS = 20
 MAX_ITTER = 20
@@ -36,11 +36,11 @@ MAX_ITTER = 20
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
-EMBEDDING_DIM = 128
-QUERY_DIM = 256
-SESSION_DIM = 512
-BATCH_SIZE = 80
-MAX_LENGTH = 50
+# EMBEDDING_DIM = 128
+# QUERY_DIM = 256
+# SESSION_DIM = 512
+# BATCH_SIZE = 80
+# MAX_LENGTH = 50
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
@@ -100,10 +100,10 @@ class Trainer(object):
         self.X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
         self.Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
 
-        self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
-        self.H_query = tf.placeholder(tf.float32, shape=(batch_size, self.hred.query_dim))
-        self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
-        self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
+        # self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
+        # self.H_query = tf.placeholder(tf.float32, shape=(batch_size, self.hred.query_dim))
+        # self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
+        # self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
 
         self.logits = self.hred.step_through_session(self.X)
         self.loss = self.hred.loss(self.X, self.logits, self.Y)
@@ -111,12 +111,12 @@ class Trainer(object):
         self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
-        self.session_inference = self.hred.step_through_session(
-            self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
-        )
-        self.step_inference = self.hred.single_step(
-            self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
-        )
+        # self.session_inference = self.hred.step_through_session(
+        #     self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+        # )
+        # self.step_inference = self.hred.single_step(
+        #     self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
+        # )
 
         self.optimizer = Optimizer(self.loss)
         self.summary = tf.merge_all_summaries()
@@ -190,9 +190,9 @@ class Trainer(object):
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                if iteration % 250 == 0:
-                    self.sample(tf_sess)
-                    self.sample_beam(tf_sess)
+                # if iteration % 250 == 0:
+                #     self.sample(tf_sess)
+                #     self.sample_beam(tf_sess)
 
                 iteration += 1
 

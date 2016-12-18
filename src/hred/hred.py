@@ -110,32 +110,39 @@ class HRED():
         # attention
 
         # expand to batch_size x num_of_steps x query_dim
-        query_encoder_T = tf.transpose(query_encoder, perm=[1, 0, 2])
-        query_decoder_T = tf.transpose(decoder, perm=[1, 0, 2])
+        # query_encoder_T = tf.transpose(query_encoder, perm=[1, 0, 2])
+        # query_decoder_T = tf.transpose(decoder, perm=[1, 0, 2])
 
         # expand to batch_size x num_of_steps x num_of_steps x query_dim
-        query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder_T, 2), (1, 1, num_of_steps, 1))
+        query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder, 2), (1, 1, num_of_steps, 1))
 
-        # flatten for eventual multiplication (batch_size + num_of_steps + num_of_steps) x (query_dim)
-        flatten_query_encoder_expanded = tf.reshape(query_encoder_expanded, (-1, self.query_dim))
-        # (batch_size + num_of_steps) x (decoder_dim)
-        flatten_decoder_T =  tf.reshape(query_decoder_T, (-1, self.decoder_dim))
+        with tf.variable_scope('attention', reuse=reuse):
+            # flatten for eventual multiplication (batch_size + num_of_steps + num_of_steps) x (query_dim)
+            flatten_query_encoder_expanded = tf.reshape(query_encoder_expanded, (-1, self.query_dim))
 
-        # decoder_dim x query_dim
-        W = tf.get_variable(name='weight', shape=(self.decoder_dim, self.query_dim), initializer=tf.random_normal_initializer(stddev=0.01))
+            # decoder_dim x query_dim
+            W = tf.get_variable(name='weight', shape=(self.decoder_dim, self.query_dim), initializer=tf.random_normal_initializer(stddev=0.01))
 
-        # (batch_size + num_of_steps) x (batch_size + num_of_steps + num_of_steps)
-        flatten_score = tf.matmul(flatten_decoder_T, tf.matmul(W, flatten_query_encoder_expanded.T))
+            # (batch_size + num_of_steps) x (batch_size + num_of_steps + num_of_steps)
+            flatten_score = tf.matmul(flatten_decoder, tf.matmul(W, tf.transpose(flatten_query_encoder_expanded)))
 
-        # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
-        score = tf.reshape(flatten_score, (num_of_steps * batch_size, num_of_steps * batch_size, num_of_steps))
+            # (batch_size x num_of_steps) x batch_size x num_of_steps x num_of_steps
+            score = tf.reshape(flatten_score, (num_of_steps, batch_size, num_of_steps, batch_size, num_of_steps))
 
-        # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
-        a = tf.nn.softmax(score)
+            # (batch_size + num_of_steps) x (num_of_steps)
+            score = tf.reduce_sum(score, [2, 3])
 
-        context = tf.reduce_sum(a * query_encoder_expanded, 2)
+            # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
+            a = tf.nn.softmax(score)
+            a_broadcasted = tf.tile(tf.expand_dims(a, 3), (1, 1, 1, self.query_dim))
 
-        flatten_decoder_with_attention = np.append(context, flatten_decoder, 1)
+            context = tf.reduce_sum(a_broadcasted * query_encoder_expanded, 2)
+            # context = tf.Print(context, [tf.shape(context)])
+
+            flatten_context = tf.reshape(context, (-1, self.query_dim))
+            # flatten_context = tf.Print(flatten_context, [tf.shape(flatten_context)])
+
+        flatten_decoder_with_attention = tf.concat(1, [flatten_context, flatten_decoder])
 
         output_layer = layers.output_layer(
             flatten_embedder,
