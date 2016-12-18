@@ -105,6 +105,7 @@ class HRED():
         # After the decoder we add an additional output layer
         flatten_decoder = tf.reshape(decoder, (-1, self.decoder_dim))
         flatten_embedder = tf.reshape(embedder, (-1, self.embedding_dim))
+        # flatten_session_encoder = tf.reshape(session_encoder, (-1, self.session_dim))
 
         output_layer = layers.output_layer(
             flatten_embedder,

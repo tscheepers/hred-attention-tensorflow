@@ -124,7 +124,7 @@ def get_batch_iterator(rng, state):
         batch_size=int(state['bs']),
         session_file=state['valid_session'],
         rank_file=state.get('valid_rank', None),
-        use_infinite_loop=False,
+        use_infinite_loop=True,
         queue_size=100,
         max_len=state['seqlen'])
     

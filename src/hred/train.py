@@ -19,11 +19,11 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = False
+RESTORE = True
 
 N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge2.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-huge3.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
@@ -143,9 +143,9 @@ class Trainer(object):
                     )
 
                     # Accumulative cost, like in hred-qs
-                    total_loss += loss_out
-                    n_pred += seq_len * batch_size
-                    cost = total_loss / n_pred
+                    total_loss_tmp = total_loss + loss_out
+                    n_pred_tmp = n_pred + seq_len * batch_size
+                    cost = total_loss_tmp / n_pred_tmp
 
                     print("Step %d - Cost: %f   Loss: %f   Accuracy: %f   Accuracy (no symbols): %f  Length: %d" %
                           (iteration, cost, loss_out, acc_out, accuracy_non_special_symbols_out, seq_len))
@@ -157,13 +157,20 @@ class Trainer(object):
                     )
 
                     # Accumulative cost, like in hred-qs
-                    total_loss += loss_out
-                    n_pred += seq_len * batch_size
-                    cost = total_loss / n_pred
+                    total_loss_tmp = total_loss + loss_out
+                    n_pred_tmp = n_pred + seq_len * batch_size
+                    cost = total_loss_tmp / n_pred_tmp
 
                 if math.isnan(loss_out) or math.isnan(cost) or cost > 100:
                     print("Found inconsistent results, restoring model...")
                     self.saver.restore(tf_sess, CHECKPOINT_FILE)
+                else:
+                    total_loss = total_loss_tmp
+                    n_pred = n_pred_tmp
+
+                    if iteration % 25 == 0:
+                        print("Saving..")
+                        self.save_model(tf_sess, loss_out)
 
                 # Sumerize
                 if iteration % 100 == 0:
@@ -172,7 +179,6 @@ class Trainer(object):
                     summary_writer.flush()
 
                 if iteration % 250 == 0:
-                    self.save_model(tf_sess, loss_out)
                     self.sample(tf_sess)
                     self.sample_beam(tf_sess)
 
