@@ -193,10 +193,10 @@ def main(FLAGS):
         print ('starting with tr sessions')
 
         txt_to_ngram_idx('./data/test', vocab, FLAGS, './data/output/tr_session.out')
-        #txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
+        txt_to_ngram_idx('./data/full_data/tr_session.ctx', vocab, FLAGS, './data/output/tr_session.out')
 
         print ('starting with val sessions')
-        #txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
+        txt_to_ngram_idx('./data/full_data/val_session.ctx', vocab, FLAGS, './data/output/val_session.out')
 
         print ('done!')
 
