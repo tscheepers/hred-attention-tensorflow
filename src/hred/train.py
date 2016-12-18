@@ -36,11 +36,11 @@ MAX_ITTER = 20
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
-EMBEDDING_DIM = 128
-QUERY_DIM = 256
-SESSION_DIM = 512
-BATCH_SIZE = 80
-MAX_LENGTH = 50
+# EMBEDDING_DIM = 128
+# QUERY_DIM = 256
+# SESSION_DIM = 512
+# BATCH_SIZE = 80
+# MAX_LENGTH = 50
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
@@ -101,7 +101,7 @@ class Trainer(object):
         self.Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
 
         self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
-        self.H_query = tf.placeholder(tf.float32, shape=(batch_size, self.hred.query_dim))
+        self.H_query = tf.placeholder(tf.float32, shape=(None, batch_size, self.hred.query_dim))
         self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
         self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
 
@@ -112,10 +112,10 @@ class Trainer(object):
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
         self.session_inference = self.hred.step_through_session(
-            self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+             self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
         )
         self.step_inference = self.hred.single_step(
-            self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
+             self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
         )
 
         self.optimizer = Optimizer(self.loss)
@@ -239,10 +239,9 @@ class Trainer(object):
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                # if iteration % 250 == 0:
-                if iteration % 5 == 0:
-                    self.sample(tf_sess)
-                    self.sample_beam(tf_sess)
+                if iteration % 2 == 0:
+                     self.sample(tf_sess)
+                #     self.sample_beam(tf_sess)
 
                 iteration += 1
 
@@ -280,7 +279,7 @@ class Trainer(object):
                     {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
                      self.H_decoder: hidden_decoder}
                 )
-
+                print("INFO -- Sample hidden states", tf.shape(hidden_query))
                 arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
 
                 # Ignore UNK and EOS (for the first min_queries)

@@ -132,11 +132,24 @@ class HRED():
         flatten_embedder = tf.reshape(embedder, (-1, self.embedding_dim))
         # flatten_session_encoder = tf.reshape(session_encoder, (-1, self.session_dim))
 
+        # attention
+
+        # expand to batch_size x num_of_steps x query_dim
+        # query_encoder_T = tf.transpose(query_encoder, perm=[1, 0, 2])
+        # query_decoder_T = tf.transpose(decoder, perm=[1, 0, 2])
+
+        # expand to num_of_steps x batch_size x num_of_steps x query_dim
+        query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder, 2), (1, 1, num_of_steps, 1))
+
+        flatten_decoder_with_attention = \
+            layers.attention(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+                             reuse=reuse)
+
         output_layer = layers.output_layer(
             flatten_embedder,
-            flatten_decoder,
+            flatten_decoder_with_attention,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim,
+            h_dim=self.decoder_dim + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )
@@ -160,11 +173,12 @@ class HRED():
         # If we want to continue decoding with single_step we need the hidden states of all GRU layers
         if return_last_with_hidden_states:
             hidden_decoder = decoder  # there is no resetted decoder output
-            return output[-1, :, :], hidden_query[-1, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
+            # Note for attention mechanism
+            return output[-1, :, :], hidden_query[:, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
         else:
             return output
 
-    def single_step(self, X, prev_hidden_query, prev_hidden_session, prev_hidden_decoder, reuse=True):
+    def single_step(self, X, prev_hidden_query_states, prev_hidden_session, prev_hidden_decoder, reuse=True):
         """
         Performs a step in the HRED X can be a 2-D tensor (batch, vocab), this can be used
         for beam search
@@ -179,7 +193,9 @@ class HRED():
         Shape: (output_dim)
         :return:
         """
-
+        # Note that with the implementation of attention the object "prev_hidden_query_states" contains not only the
+        # previous query encoded state but all previous states, therefore we need to get the last query state
+        prev_hidden_query = prev_hidden_query_states[-1, :, :]
         # Making embeddings for x
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_dim, reuse=reuse)
 
@@ -221,13 +237,25 @@ class HRED():
         )
 
         decoder = hidden_decoder
+        flatten_decoder = tf.reshape(decoder, (-1, self.decoder_dim))
+
+        # add attention layer
+        # expand to num_of_steps x batch_size x num_of_steps x query_dim
+        num_of_atten_states = tf.shape(prev_hidden_query_states)[0]
+        tf.Print(num_of_atten_states, [num_of_atten_states], "INFO - single-step ")
+        tf.Print(flatten_decoder, [tf.shape(flatten_decoder)], "INFO - decoder.shape ")
+        query_encoder_expanded = tf.tile(tf.expand_dims(prev_hidden_query_states, 2), (1, 1, num_of_atten_states, 1))
+
+        flatten_decoder_with_attention = \
+            layers.attention(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+                             reuse=reuse)
 
         # After the decoder we add an additional output layer
         output = layers.output_layer(
             embedder,
-            decoder,
+            flatten_decoder_with_attention,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim,
+            h_dim=self.decoder_dim + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )
