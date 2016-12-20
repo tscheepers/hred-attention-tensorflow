@@ -264,11 +264,23 @@ def attention_session(query_encoder_expanded, flatten_decoder, enc_dim=256, dec_
         # (batch_size + num_of_steps) x (batch_size + num_of_steps + num_of_steps)
         flatten_score = tf.matmul(flatten_decoder, tf.matmul(W, tf.transpose(flatten_query_encoder_expanded)))
 
-        # (batch_size x num_of_steps) x batch_size x num_of_steps x num_of_steps
+        # batch_size x num_of_steps x batch_size x num_of_steps x num_of_steps
         score = tf.reshape(flatten_score, (num_of_steps, batch_size, num_of_steps, batch_size, num_of_steps))
 
-        # (batch_size + num_of_steps) x (num_of_steps)
-        score = tf.reduce_sum(score, [2, 3])
+        # batch_size x num_of_steps x num_of_steps_at
+        score = tf.transpose(
+            # batch_size x num_of_steps_at x num_of_steps
+            tf.matrix_diag_part(
+                # batch_size x num_of_steps_at x num_of_steps x num_of_steps
+                tf.transpose(
+                    # batch_size x num_of_steps x num_of_steps x num_of_steps_at
+                    tf.matrix_diag_part(
+                        # num_of_steps x num_of_steps x num_of_steps_at x batch_size x batch_size
+                        tf.transpose(score, [1, 3, 4, 0, 2])
+                    ), [3, 2, 0, 1]
+                )
+            ), [0, 2, 1]
+        )
 
         # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
         a = tf.nn.softmax(score)
@@ -317,13 +329,17 @@ def attention_step(query_encoder_expanded, flatten_decoder, enc_dim=256, dec_dim
         score = tf.reshape(flatten_score, (batch_size, batch_size, num_of_steps))
 
         # (batch_size) x (num_of_steps)
-        score = tf.reduce_sum(score, [1])
+        score = tf.transpose(
+            tf.matrix_diag_part(
+                tf.transpose(score, [2, 0, 1])
+            ), [1, 0]
+        )
 
         a = tf.nn.softmax(score)
         a_broadcasted = tf.tile(tf.expand_dims(a, 2), (1, 1, enc_dim))
 
         context = tf.reduce_sum(a_broadcasted * query_encoder_expanded, 1)
-        context = tf.Print(context, [tf.shape(context)])
+        # context = tf.Print(context, [tf.shape(context)])
 
         flatten_context = tf.reshape(context, (-1, enc_dim))
 

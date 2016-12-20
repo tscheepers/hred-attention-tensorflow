@@ -11,7 +11,7 @@ from hred import HRED
 from optimizer import Optimizer
 import cPickle
 import math
-import src.sordoni.data_iterator as sordoni_data_iterator
+import sordoni.data_iterator as sordoni_data_iterator
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
@@ -22,48 +22,39 @@ EOS_SYMBOL = 2
 RESTORE = False
 
 N_BUCKETS = 20
-MAX_ITTER = 20
+MAX_ITTER = 10000000
 
 
-# CHECKPOINT_FILE = '../../checkpoints/model-huge3.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-huge-attention.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-# SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
-# SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
-# SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
-# VOCAB_SIZE = 50003
+SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
+VOCAB_SIZE = 50003
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
-# EMBEDDING_DIM = 128
-# QUERY_DIM = 256
-# SESSION_DIM = 512
-# BATCH_SIZE = 80
-# MAX_LENGTH = 50
+EMBEDDING_DIM = 64
+QUERY_DIM = 128
+SESSION_DIM = 256
+BATCH_SIZE = 80
+MAX_LENGTH = 50
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
 # OUR_TRAIN_FILE = '../../data/small_train.out'
 # OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
-
 # SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
 # SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
 # SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
-
-CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
-OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
-OUR_TRAIN_FILE = '../../data/small_train.out'
-OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
-SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
-SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
-SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
-VOCAB_SIZE = 2504
-EMBEDDING_DIM = 10
-QUERY_DIM = 15
-SESSION_DIM = 20
-BATCH_SIZE = 80
-MAX_LENGTH = 50
+# VOCAB_SIZE = 2504
+# EMBEDDING_DIM = 10
+# QUERY_DIM = 15
+# SESSION_DIM = 20
+# BATCH_SIZE = 80
+# MAX_LENGTH = 50
 SEED = 1234
 
 
@@ -169,7 +160,7 @@ class Trainer(object):
                     query_masks = np.concatenate((query_masks, new_mask), axis=0)
 
             if first_query:
-                batch_masks = query_masks
+                batch_masks = np.expand_dims(query_masks, axis=2)
                 first_query = False
             else:
                 batch_masks = np.dstack((batch_masks, query_masks))
@@ -248,9 +239,9 @@ class Trainer(object):
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
-                # if iteration % 2 == 0:
+                if iteration % 250 == 0:
                      # self.sample(tf_sess)
-                #     self.sample_beam(tf_sess)
+                     self.sample_beam(tf_sess)
 
                 iteration += 1
 
@@ -317,9 +308,11 @@ class Trainer(object):
             x_batch, _, seq_len = self.get_batch(self.valid_data)
             input_x = np.expand_dims(x_batch[:-(seq_len / 2), 1], axis=1)
 
+            attention_mask = self.make_attention_mask(input_x)
+
             softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                 self.session_inference,
-                feed_dict={self.X: input_x}
+                feed_dict={self.X: input_x, self.attention_mask: attention_mask}
             )
 
             current_beam_size = beam_size
@@ -355,10 +348,13 @@ class Trainer(object):
                 # expand all hypotheses
                 for prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted in current_hypotheses:
 
+                    input_for_mask = np.concatenate((input_x, np.expand_dims(np.array(result), axis=1)), axis=0)
+                    attention_mask = self.make_attention_mask(input_for_mask)
+
                     softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                         self.step_inference,
                         {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
-                         self.H_decoder: hidden_decoder}
+                         self.H_decoder: hidden_decoder, self.attention_mask: attention_mask}
                     )
 
                     # Reverse arg sort (highest prob above)
