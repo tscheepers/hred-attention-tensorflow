@@ -13,32 +13,32 @@ import cPickle
 import math
 import sordoni.data_iterator as sordoni_data_iterator
 
-VALIDATION_FILE = '../../data/val_session.out'
-TEST_FILE = '../../data/test_session.out'
+VALIDATION_FILE = '../../data/val_ngram_session.out'
+TEST_FILE = '../../data/test_ngram_session.out'
 LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = True
+RESTORE = False
 
 N_BUCKETS = 20
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge3.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model_ngram-huge.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
-SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
-SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
-VOCAB_SIZE = 50003
+SORDONI_VOCAB_FILE = '../../data/sordoni/ngram/all/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/ngram/all/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/ngram/all/valid.ses.pkl'
+VOCAB_SIZE = 540
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
 EMBEDDING_DIM = 128
-QUERY_DIM = 256
-SESSION_DIM = 512
+QUERY_DIM = 512
+SESSION_DIM = 1024
 BATCH_SIZE = 80
-MAX_LENGTH = 50
+MAX_LENGTH = 256
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
@@ -236,8 +236,8 @@ class Trainer(object):
 
             input_x = np.array(input_x).flatten()
             result = np.array(result).flatten()
-            print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
-            print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+            print('Sample input:  %s' % (''.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+            print('Sample output: %s' % (''.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
             print('')
 
     def sample_beam(self, sess, max_steps=30, num_of_samples=3, beam_size=10, min_queries=2):
@@ -334,11 +334,11 @@ class Trainer(object):
             final_hypotheses += current_hypotheses
 
             input_x = np.array(input_x).flatten()
-            print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+            print('Sample input:  %s' % (''.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
 
             for _, _, result, _, _, _, _ in final_hypotheses:
                 result = np.array(result).flatten()
-                print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+                print('Sample output: %s' % (''.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
 
             print('')
 
