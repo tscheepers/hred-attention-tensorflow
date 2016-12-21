@@ -140,19 +140,19 @@ class HRED():
 
         # expand to num_of_steps x batch_size x num_of_steps x query_dim
 
-        query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder, 2), (1, 1, num_of_steps, 1))
-
-        query_encoder_expanded = query_encoder_expanded * tf.tile(tf.expand_dims(attention_mask, 3), (1, 1, 1, self.query_dim))
-
-        flatten_decoder_with_attention = \
-            layers.attention_session(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
-                             reuse=reuse)
+        # query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder, 2), (1, 1, num_of_steps, 1))
+        #
+        # query_encoder_expanded = query_encoder_expanded * tf.tile(tf.expand_dims(attention_mask, 3), (1, 1, 1, self.query_dim))
+        #
+        # flatten_decoder_with_attention = \
+        #     layers.attention_session(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+        #                      reuse=reuse)
 
         output_layer = layers.output_layer(
             flatten_embedder,
-            flatten_decoder_with_attention,
+            flatten_decoder,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim + self.query_dim,
+            h_dim=self.decoder_dim, # + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )
@@ -244,21 +244,21 @@ class HRED():
 
         # add attention layer
         # expand to num_of_steps x batch_size x num_of_steps x query_dim
-        num_of_atten_states = tf.shape(prev_hidden_query_states)[0]
+        # num_of_atten_states = tf.shape(prev_hidden_query_states)[0]
         # tf.Print(num_of_atten_states, [num_of_atten_states], "INFO - single-step ")
         # tf.Print(flatten_decoder, [tf.shape(flatten_decoder)], "INFO - decoder.shape ")
-        query_encoder_expanded = tf.transpose(prev_hidden_query_states, [1, 0, 2])
+        # query_encoder_expanded = tf.transpose(prev_hidden_query_states, [1, 0, 2])
 
-        flatten_decoder_with_attention = \
-            layers.attention_step(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
-                                  reuse=reuse)
+        # flatten_decoder_with_attention = \
+        #     layers.attention_step(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+        #                           reuse=reuse)
 
         # After the decoder we add an additional output layer
         output = layers.output_layer(
             embedder,
-            flatten_decoder_with_attention,
+            flatten_decoder,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim + self.query_dim,
+            h_dim=self.decoder_dim, # + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )

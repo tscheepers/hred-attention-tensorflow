@@ -12,6 +12,7 @@ from optimizer import Optimizer
 import cPickle
 import math
 import sordoni.data_iterator as sordoni_data_iterator
+from utils import make_attention_mask
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
@@ -19,13 +20,13 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = False
+RESTORE = True
 
 N_BUCKETS = 20
 MAX_ITTER = 10000000
 
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge-attention.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-huge-attention-fixed.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
@@ -39,7 +40,7 @@ VOCAB_SIZE = 50003
 EMBEDDING_DIM = 64
 QUERY_DIM = 128
 SESSION_DIM = 256
-BATCH_SIZE = 80
+BATCH_SIZE = 50
 MAX_LENGTH = 50
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
@@ -116,61 +117,6 @@ class Trainer(object):
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
 
-    def make_attention_mask(self, X):
-
-        def make_mask(last_seen_eoq_pos, query, eoq_symbol):
-
-            if last_seen_eoq_pos == -1:
-                return np.zeros((1, len(query)))
-            else:
-                mask = np.ones([len(query)])
-                mask[last_seen_eoq_pos:] = 0.
-                mask = np.where(query == eoq_symbol, 0, mask)
-                return mask.reshape(1, (len(mask)))
-
-        # eoq_mask = np.where(X == float(EOQ_SYMBOL), float(EOQ_SYMBOL), 0.)
-        first_query = True
-
-        for i in range(X.shape[1]): #  loop over batch size --> this gives 80 queries
-            query = X[:, i] #eoq_mask[:, i] #X[:, i]
-            #print("query", query)
-
-            first = True
-            last_seen_eoq_pos = -1
-            for w_pos in range(len(query)):
-                # if query[w_pos] == float(EOQ_SYMBOL):
-                #     if first:
-                #         query_masks = make_mask(-1, query, float(EOQ_SYMBOL))
-                #         first = False
-                #     else:
-                #         new_mask = make_mask(-1, query, float(EOQ_SYMBOL))
-                #         query_masks = np.concatenate((query_masks, new_mask), axis=0)
-                #     last_seen_eoq_pos = w_pos
-                # else:
-                #     new_mask = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
-                #     query_masks = np.concatenate((query_masks, new_mask), axis=0)
-                if query[w_pos] == float(EOQ_SYMBOL):
-                    last_seen_eoq_pos = w_pos
-
-                if first:
-                    query_masks = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
-                    first = False
-                else:
-                    new_mask = make_mask(last_seen_eoq_pos, query, float(EOQ_SYMBOL))
-                    query_masks = np.concatenate((query_masks, new_mask), axis=0)
-
-            if first_query:
-                batch_masks = np.expand_dims(query_masks, axis=2)
-                first_query = False
-            else:
-                batch_masks = np.dstack((batch_masks, query_masks))
-
-        batch_masks = np.transpose(batch_masks, (0, 2, 1))
-        # print("shape batch masks", batch_masks.shape)
-        # print("batch masks:", batch_masks)
-
-        return batch_masks  # = attention masks
-
     def train(self, max_epochs=1000, max_length=50, batch_size=80):
 
         # Add an op to initialize the variables.
@@ -194,7 +140,7 @@ class Trainer(object):
 
                 x_batch, y_batch, seq_len = self.get_batch(self.train_data)
 
-                attention_mask = self.make_attention_mask(x_batch)
+                attention_mask = make_attention_mask(x_batch)
 
                 if iteration % 10 == 0:
                     loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
@@ -308,7 +254,7 @@ class Trainer(object):
             x_batch, _, seq_len = self.get_batch(self.valid_data)
             input_x = np.expand_dims(x_batch[:-(seq_len / 2), 1], axis=1)
 
-            attention_mask = self.make_attention_mask(input_x)
+            attention_mask = make_attention_mask(input_x)
 
             softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                 self.session_inference,
@@ -349,7 +295,7 @@ class Trainer(object):
                 for prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted in current_hypotheses:
 
                     input_for_mask = np.concatenate((input_x, np.expand_dims(np.array(result), axis=1)), axis=0)
-                    attention_mask = self.make_attention_mask(input_for_mask)
+                    attention_mask = make_attention_mask(input_for_mask)
 
                     softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                         self.step_inference,

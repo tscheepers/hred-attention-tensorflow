@@ -267,22 +267,22 @@ def attention_session(query_encoder_expanded, flatten_decoder, enc_dim=256, dec_
         # batch_size x num_of_steps x batch_size x num_of_steps x num_of_steps
         score = tf.reshape(flatten_score, (num_of_steps, batch_size, num_of_steps, batch_size, num_of_steps))
 
-        # batch_size x num_of_steps x num_of_steps_at
+        # 0:batch_size x 1:num_of_steps x 2:num_of_steps_at
         score = tf.transpose(
-            # batch_size x num_of_steps_at x num_of_steps
+            # 0:batch_size x 1:num_of_steps_at x 2:num_of_steps
             tf.matrix_diag_part(
-                # batch_size x num_of_steps_at x num_of_steps x num_of_steps
+                # 0:batch_size x 1:num_of_steps_at x 2:num_of_steps x 3:num_of_steps
                 tf.transpose(
-                    # batch_size x num_of_steps x num_of_steps x num_of_steps_at
+                    # 0:num_of_steps x 1:num_of_steps x 2:num_of_steps_at x 3:batch_size
                     tf.matrix_diag_part(
-                        # num_of_steps x num_of_steps x num_of_steps_at x batch_size x batch_size
+                        # 0:num_of_steps x 1:num_of_steps x 2:num_of_steps_at x 3:batch_size x 4:batch_size
                         tf.transpose(score, [1, 3, 4, 0, 2])
                     ), [3, 2, 0, 1]
                 )
             ), [0, 2, 1]
         )
 
-        # (batch_size + num_of_steps) x (batch_size + num_of_steps) x (num_of_steps)
+        # batch_size x num_of_steps x batch_size x num_of_steps x num_of_steps
         a = tf.nn.softmax(score)
         a_broadcasted = tf.tile(tf.expand_dims(a, 3), (1, 1, 1, enc_dim))
 
