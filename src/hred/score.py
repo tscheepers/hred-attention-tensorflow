@@ -11,9 +11,9 @@ from hred import HRED
 
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
-CONTEXT_FILE = '../../data/1_exp-baseline/tr_all_hred_sess.ctx'
-CANDIDATE_FILE = '../../data/1_exp-baseline/tr_all_hred_cand.ctx'
-OUTPUT_SCORE_FILE = '../../data/1_exp-baseline/score'
+CONTEXT_FILE = '../../data/2_exp-context-length/test_c1_hred_sess.ctx'
+CANDIDATE_FILE = '../../data/2_exp-context-length/test_c1_hred_cand.ctx'
+OUTPUT_SCORE_FILE = '../../data/2_exp-context-length/test_c1_score'
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
@@ -118,9 +118,9 @@ class Scorer(object):
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
 
-    def score_candidates(self, context, candidates):
+    def score_candidates(self, context, candidates, output_file):
 
-        print("Start scoring.")
+        # print("Start scoring.")
 
         input_for_mask = np.expand_dims(np.array(context), axis=1)
         # attention_mask = make_attention_mask(input_for_mask)
@@ -169,6 +169,8 @@ class Scorer(object):
 
             score = np.mean(np.array(probs))
             # print("score: %f" % score)
+
+            output_file.write('%f\n' % score)
             scores += [score]
 
         return scores
@@ -195,15 +197,13 @@ if __name__ == '__main__':
             scores = []
             i = 0
 
-            for context, candidates in zip(all_contexts, all_candidates):
+            with open(OUTPUT_SCORE_FILE, 'w') as output_file:
 
-                if i % 10:
-                    print('%d/%d' % (i, len(all_contexts)))
+                for context, candidates in zip(all_contexts, all_candidates):
 
-                scores += scorer.score_candidates(context + [EOQ_SYMBOL], candidates)
+                    if i % 100 == 0:
+                        print('%f %%' % (100*i/float(len(all_contexts))))
 
-                i += 1
+                    scores += scorer.score_candidates(context + [EOQ_SYMBOL], candidates, output_file)
 
-            with open(OUTPUT_SCORE_FILE, 'w') as the_file:
-                for score in scores:
-                    the_file.write('%f\n' % score)
+                    i += 1
