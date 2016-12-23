@@ -15,6 +15,24 @@ CONTEXT_FILE = '../../data/2_exp-context-length/test_c1_hred_sess.ctx'
 CANDIDATE_FILE = '../../data/2_exp-context-length/test_c1_hred_cand.ctx'
 OUTPUT_SCORE_FILE = '../../data/2_exp-context-length/test_c1_score'
 
+FILE_PREFIXES = [
+    # '../../data/2_exp-context-length/test_c1_hred',
+    # '../../data/2_exp-context-length/val_c1_hred',
+    # '../../data/2_exp-context-length/tr_c1_hred',
+    # '../../data/2_exp-context-length/test_c2_hred',
+    # '../../data/2_exp-context-length/val_c2_hred',
+    # '../../data/2_exp-context-length/tr_c2_hred',
+    # '../../data/2_exp-context-length/test_c3_hred',
+    # '../../data/2_exp-context-length/val_c3_hred',
+    # '../../data/2_exp-context-length/tr_c3_hred',
+    # '../../data/3_exp-noisy/test_noisy_hred',
+    # '../../data/3_exp-noisy/val_noisy_hred',
+    # '../../data/3_exp-noisy/tr_noisy_hred',
+    # '../../data/4_exp-long-tail/test_long_all_hred',
+    # '../../data/4_exp-long-tail/val_long_all_hred',
+    '../../data/4_exp-long-tail/tr_long_all_hred',
+]
+
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
 LOGS_DIR = '../../logs'
@@ -185,25 +203,33 @@ if __name__ == '__main__':
             scorer.saver.restore(sess, CHECKPOINT_FILE)
             print("Model restored.")
 
-            all_contexts = [[scorer.vocab_dict.get(z, EOQ_SYMBOL) for z in y.split()] for y in open(CONTEXT_FILE).readlines()]
+            for prefix in FILE_PREFIXES:
 
-            print("Context loaded.")
+                context_file = prefix + '_sess.ctx'
+                candidate_file = prefix + '_cand.ctx'
+                output_source_file = prefix + '_score'
 
-            all_candidates = [[[scorer.vocab_dict.get(z, EOQ_SYMBOL) for z in y.split()] for y in x.split('\t')] for x in
-                          open(CANDIDATE_FILE).readlines()]
+                all_contexts = [[scorer.vocab_dict.get(z, EOQ_SYMBOL) for z in y.split()] for y in open(context_file).readlines()]
 
-            print("Candidates loaded.")
+                print("Context loaded: %s" % context_file)
 
-            scores = []
-            i = 0
+                all_candidates = [[[scorer.vocab_dict.get(z, EOQ_SYMBOL) for z in y.split()] for y in x.split('\t')] for x in
+                              open(candidate_file).readlines()]
 
-            with open(OUTPUT_SCORE_FILE, 'w') as output_file:
+                print("Candidates loaded: %s" % candidate_file)
 
-                for context, candidates in zip(all_contexts, all_candidates):
+                scores = []
+                i = 0
 
-                    if i % 100 == 0:
-                        print('%f %%' % (100*i/float(len(all_contexts))))
+                with open(output_source_file, 'w') as output_file:
 
-                    scores += scorer.score_candidates(context + [EOQ_SYMBOL], candidates, output_file)
+                    for context, candidates in zip(all_contexts, all_candidates):
 
-                    i += 1
+                        if i % 100 == 0:
+                            print('%f %%' % (100*i/float(len(all_contexts))))
+
+                        scores += scorer.score_candidates(context + [EOQ_SYMBOL], candidates, output_file)
+
+                        i += 1
+
+                print("Scores saved: %s" % output_source_file)

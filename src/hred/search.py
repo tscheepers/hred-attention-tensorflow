@@ -11,9 +11,8 @@ from hred import HRED
 
 tf.logging.set_verbosity(tf.logging.DEBUG)
 
-
-VALIDATION_FILE = '../../data/val_session.out'
-TEST_FILE = '../../data/test_session.out'
+VALIDATION_FILE = '../../data/val_ngram_session.out'
+TEST_FILE = '../../data/test_ngram_session.out'
 LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
@@ -23,23 +22,22 @@ RESTORE = True
 N_BUCKETS = 20
 MAX_ITTER = 10000000
 
-
-CHECKPOINT_FILE = '../../checkpoints/model-huge-attention-fixed.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model_ngram-huge.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
-SORDONI_VOCAB_FILE = '../../data/sordoni/all/train.dict.pkl'
-SORDONI_TRAIN_FILE = '../../data/sordoni/all/train.ses.pkl'
-SORDONI_VALID_FILE = '../../data/sordoni/all/valid.ses.pkl'
+SORDONI_VOCAB_FILE = '../../data/sordoni/ngram/all/train.dict.pkl'
+SORDONI_TRAIN_FILE = '../../data/sordoni/ngram/all/train.ses.pkl'
+SORDONI_VALID_FILE = '../../data/sordoni/ngram/all/valid.ses.pkl'
 VOCAB_SIZE = 50003
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
-EMBEDDING_DIM = 64
-QUERY_DIM = 128
-SESSION_DIM = 256
-BATCH_SIZE = 50
-MAX_LENGTH = 50
+EMBEDDING_DIM = 128
+QUERY_DIM = 512
+SESSION_DIM = 1024
+BATCH_SIZE = 1
+MAX_LENGTH = 256
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
@@ -55,6 +53,7 @@ MAX_LENGTH = 50
 # BATCH_SIZE = 80
 # MAX_LENGTH = 50
 SEED = 1234
+
 
 # For beam search example:
 # https://github.com/tensorflow/tensorflow/issues/654#issuecomment-168237741
@@ -114,7 +113,7 @@ class Sampler(object):
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
 
-    def beam_sample(self, input_x, max_steps=30, beam_size=10, min_queries=2):
+    def beam_sample(self, input_x, max_steps=30, beam_size=25, min_queries=1):
 
         attention_mask = make_attention_mask(input_x)
 
@@ -177,7 +176,7 @@ class Sampler(object):
                     # Ignore UNK and EOS (for the first min_queries)
                     while arg_sort[arg_sort_i] == self.hred.unk_symbol or (
                                     arg_sort[
-                                        arg_sort_i] == self.hred.eos_symbol and queries_accepted < min_queries):
+                                        arg_sort_i] == self.hred.eos_symbol and queries_accepted <= min_queries):
                         arg_sort_i += 1
 
                     new_x = arg_sort[arg_sort_i]
@@ -199,7 +198,7 @@ class Sampler(object):
             for hypothesis in next_hypotheses:
                 _, x, _, _, _, _, queries_accepted = hypothesis
 
-                if x == self.hred.eos_symbol:
+                if x == self.hred.eoq_symbol:
                     final_hypotheses += [hypothesis]
                     current_beam_size -= 1
                 else:
@@ -208,14 +207,34 @@ class Sampler(object):
         final_hypotheses += current_hypotheses
 
         input_x = np.array(input_x).flatten()
-        print('Sample input:  %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+        print('Sample input:  %s' % (''.join([self.vocab_lookup_dict.get(x, '?') for x in input_x]),))
+
+        print('Sample output:')
 
         for _, _, result, _, _, _, _ in final_hypotheses:
             result = np.array(result).flatten()
-            print('Sample output: %s' % (' '.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+            print('%s' % (''.join([self.vocab_lookup_dict.get(x, '?') for x in result])))
+
+        print('')
 
         return final_hypotheses
 
+
+def get_batch(train_data):
+    # The training is done with a trick. We append a special </q> at the beginning of the dialog
+    # so that we can predict also the first sent in the dialog starting from the dialog beginning token (</q>).
+
+    data = train_data.next()
+    seq_len = data['max_length']
+    prepend = np.ones((1, data['x'].shape[1]))
+    x_data_full = np.concatenate((prepend, data['x']))
+    x_batch = x_data_full[:seq_len]
+    y_batch = x_data_full[1:seq_len + 1]
+
+    # x_batch = np.transpose(np.asarray(x_batch))
+    # y_batch = np.transpose(np.asarray(y_batch))
+
+    return x_batch, y_batch, seq_len
 
 if __name__ == '__main__':
 
@@ -229,7 +248,12 @@ if __name__ == '__main__':
             sampler.saver.restore(sess, CHECKPOINT_FILE)
             print("Model restored.")
 
-            sampler.beam_sample([12, 14, 13, EOQ_SYMBOL, 94, 11, EOQ_SYMBOL])
+            for i in range(250):
+
+                x_batch, _, seq_len = get_batch(sampler.valid_data)
+                input_x = np.expand_dims(x_batch[:, 0], axis=1)
+
+                sampler.beam_sample(input_x)
 
 
 
