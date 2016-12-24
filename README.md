@@ -11,3 +11,4 @@ An extension on the Hierachical Recurrent Encoder-Decoder for Generative Context
   - [Chuncked pre-processed data](https://www.dropbox.com/sh/zm430xgouaibo5q/AABO9OuWDlkqMI5nYM9vgS80a?dl=0)
   - [Data to feed into the model](https://www.dropbox.com/sh/d9ukeq9uptamik8/AACTfqrnP2erci0N-A3cxu0Fa?dl=0)
   
+Implementation by: [Maartje ter Hoeve](https://github.com/maartjeth), [Jörg Sander](https://github.com/toologicbv), [Maurits Bleeker](https://github.com/MBleeker) and [Thijs Scheepers](https://github.com/tscheepers)
