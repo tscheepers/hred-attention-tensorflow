@@ -5,13 +5,14 @@ import numpy as np
 import tensorflow as tf
 import subprocess
 
-tf.logging.set_verbosity(tf.logging.DEBUG)
+tf.logging.set_verbosity(tf.logging.DEBUG) # test
 
 from hred import HRED
 from optimizer import Optimizer
 import cPickle
 import math
 import sordoni.data_iterator as sordoni_data_iterator
+from utils import make_attention_mask
 
 VALIDATION_FILE = '../../data/val_session.out'
 TEST_FILE = '../../data/test_session.out'
@@ -22,8 +23,10 @@ EOS_SYMBOL = 2
 RESTORE = True
 
 N_BUCKETS = 20
+MAX_ITTER = 10000000
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge3.ckpt'
+
+CHECKPOINT_FILE = '../../checkpoints/model-huge-attention-fixed.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
@@ -34,10 +37,10 @@ VOCAB_SIZE = 50003
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
-EMBEDDING_DIM = 128
-QUERY_DIM = 256
-SESSION_DIM = 512
-BATCH_SIZE = 80
+EMBEDDING_DIM = 64
+QUERY_DIM = 128
+SESSION_DIM = 256
+BATCH_SIZE = 50
 MAX_LENGTH = 50
 
 # CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
@@ -88,23 +91,24 @@ class Trainer(object):
 
         self.X = tf.placeholder(tf.int64, shape=(max_length, batch_size))
         self.Y = tf.placeholder(tf.int64, shape=(max_length, batch_size))
+        self.attention_mask = tf.placeholder(tf.float32, shape=(max_length, batch_size, max_length))
 
         self.X_sample = tf.placeholder(tf.int64, shape=(batch_size,))
-        self.H_query = tf.placeholder(tf.float32, shape=(batch_size, self.hred.query_dim))
+        self.H_query = tf.placeholder(tf.float32, shape=(None, batch_size, self.hred.query_dim))
         self.H_session = tf.placeholder(tf.float32, shape=(batch_size, self.hred.session_dim))
         self.H_decoder = tf.placeholder(tf.float32, shape=(batch_size, self.hred.decoder_dim))
 
-        self.logits = self.hred.step_through_session(self.X)
+        self.logits = self.hred.step_through_session(self.X, self.attention_mask)
         self.loss = self.hred.loss(self.X, self.logits, self.Y)
         self.softmax = self.hred.softmax(self.logits)
         self.accuracy = self.hred.non_padding_accuracy(self.logits, self.Y)
         self.non_symbol_accuracy = self.hred.non_symbol_accuracy(self.logits, self.Y)
 
         self.session_inference = self.hred.step_through_session(
-            self.X, return_softmax=True, return_last_with_hidden_states=True, reuse=True
+             self.X, self.attention_mask, return_softmax=True, return_last_with_hidden_states=True, reuse=True
         )
         self.step_inference = self.hred.single_step(
-            self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
+             self.X_sample, self.H_query, self.H_session, self.H_decoder, reuse=True
         )
 
         self.optimizer = Optimizer(self.loss)
@@ -132,14 +136,16 @@ class Trainer(object):
             total_loss = 0.0
             n_pred = 0.0
 
-            for iteration in range(1000000):
+            for iteration in range(MAX_ITTER):
 
                 x_batch, y_batch, seq_len = self.get_batch(self.train_data)
+
+                attention_mask = make_attention_mask(x_batch)
 
                 if iteration % 10 == 0:
                     loss_out, _, acc_out, accuracy_non_special_symbols_out = tf_sess.run(
                         [self.loss, self.optimizer.optimize_op, self.accuracy, self.non_symbol_accuracy],
-                        {self.X: x_batch, self.Y: y_batch}
+                        {self.X: x_batch, self.Y: y_batch, self.attention_mask: attention_mask}
                     )
 
                     # Accumulative cost, like in hred-qs
@@ -153,7 +159,7 @@ class Trainer(object):
                 else:
                     loss_out, _ = tf_sess.run(
                         [self.loss, self.optimizer.optimize_op],
-                        {self.X: x_batch, self.Y: y_batch}
+                        {self.X: x_batch, self.Y: y_batch, self.attention_mask: attention_mask}
                     )
 
                     # Accumulative cost, like in hred-qs
@@ -173,14 +179,15 @@ class Trainer(object):
                         self.save_model(tf_sess, loss_out)
 
                 # Sumerize
-                if iteration % 100 == 0:
-                    summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch})
+                if iteration % 10 == 0:
+                #if iteration % 100 == 0:
+                    summary_str = tf_sess.run(self.summary, {self.X: x_batch, self.Y: y_batch, self.attention_mask: attention_mask})
                     summary_writer.add_summary(summary_str, iteration)
                     summary_writer.flush()
 
                 if iteration % 250 == 0:
-                    self.sample(tf_sess)
-                    self.sample_beam(tf_sess)
+                     # self.sample(tf_sess)
+                     self.sample_beam(tf_sess)
 
                 iteration += 1
 
@@ -218,7 +225,7 @@ class Trainer(object):
                     {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
                      self.H_decoder: hidden_decoder}
                 )
-
+                print("INFO -- Sample hidden states", tf.shape(hidden_query))
                 arg_sort = np.argsort(softmax_out, axis=1)[0][::-1]
 
                 # Ignore UNK and EOS (for the first min_queries)
@@ -247,9 +254,11 @@ class Trainer(object):
             x_batch, _, seq_len = self.get_batch(self.valid_data)
             input_x = np.expand_dims(x_batch[:-(seq_len / 2), 1], axis=1)
 
+            attention_mask = make_attention_mask(input_x)
+
             softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                 self.session_inference,
-                feed_dict={self.X: input_x}
+                feed_dict={self.X: input_x, self.attention_mask: attention_mask}
             )
 
             current_beam_size = beam_size
@@ -285,10 +294,13 @@ class Trainer(object):
                 # expand all hypotheses
                 for prob, x, result, hidden_query, hidden_session, hidden_decoder, queries_accepted in current_hypotheses:
 
+                    input_for_mask = np.concatenate((input_x, np.expand_dims(np.array(result), axis=1)), axis=0)
+                    attention_mask = make_attention_mask(input_for_mask)
+
                     softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                         self.step_inference,
                         {self.X_sample: [x], self.H_query: hidden_query, self.H_session: hidden_session,
-                         self.H_decoder: hidden_decoder}
+                         self.H_decoder: hidden_decoder, self.attention_mask: attention_mask}
                     )
 
                     # Reverse arg sort (highest prob above)

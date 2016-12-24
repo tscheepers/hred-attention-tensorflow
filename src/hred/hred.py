@@ -29,7 +29,17 @@ class HRED():
         self.eoq_symbol = eoq_symbol  # End of Query symbol
         self.eos_symbol = eos_symbol  # End of Session symbol
 
-    def step_through_session(self, X, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
+    # def seen_eoq(self):
+    #     return tf.ones(shape=[1, 5])
+    #
+    # def not_seen_eoq(self):
+    #     return tf.zeros(shape=[1, 5])
+
+    def make_attention_mask(self, eoq=False):
+        mask = [1, 2, 3, 4]
+        return tf.Variable(mask)
+
+    def step_through_session(self, X, attention_mask, return_last_with_hidden_states=False, return_softmax=False, reuse=False):
         """
         Train for a batch of sessions in the HRED X can be a 3-D tensor (steps, batch, vocab)
 
@@ -47,6 +57,21 @@ class HRED():
         # Mask used to reset the query encoder when symbol is End-Of-Query symbol and to retain the state of the
         # session encoder when EoQ symbol has been seen yet.
         eoq_mask = tf.expand_dims(tf.cast(tf.not_equal(X, self.eoq_symbol), tf.float32), 2)
+
+        # eoq mask has size [MAX LEN x BATCH SIZE] --> we want to loop over batch size
+        # print(eoq_mask)
+
+        # BATCH_SIZE = 80
+        # MAX_LEN = 50  # TODO: this shouldn't be as local
+        # for b in range(BATCH_SIZE):
+        #     for qw in range(MAX_LEN):
+        #         condition = tf.not_equal(eoq_mask[qw, b], 0, name='condition') # if not equal to zero --> then its not an eoq symbol
+        #         # print(condition)
+        #         # print(condition[0])
+        #         a = tf.cond(condition[0], lambda: self.make_attention_mask(eoq=False), lambda: self.make_attention_mask(eoq=True))
+        #         #print(a)
+
+
 
         # Computes the encoded query state. The tensorflow scan function repeatedly applies the gru_layer_with_reset
         # function to (embedder, eoq_mask) and it initialized the gru layer with the zero tensor.
@@ -107,11 +132,27 @@ class HRED():
         flatten_embedder = tf.reshape(embedder, (-1, self.embedding_dim))
         # flatten_session_encoder = tf.reshape(session_encoder, (-1, self.session_dim))
 
+        # attention
+
+        # expand to batch_size x num_of_steps x query_dim
+        # query_encoder_T = tf.transpose(query_encoder, perm=[1, 0, 2])
+        # query_decoder_T = tf.transpose(decoder, perm=[1, 0, 2])
+
+        # expand to num_of_steps x batch_size x num_of_steps x query_dim
+
+        query_encoder_expanded = tf.tile(tf.expand_dims(query_encoder, 2), (1, 1, num_of_steps, 1))
+
+        query_encoder_expanded = query_encoder_expanded * tf.tile(tf.expand_dims(attention_mask, 3), (1, 1, 1, self.query_dim))
+
+        flatten_decoder_with_attention = \
+            layers.attention_session(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+                             reuse=reuse)
+
         output_layer = layers.output_layer(
             flatten_embedder,
-            flatten_decoder,
+            flatten_decoder_with_attention,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim,
+            h_dim=self.decoder_dim + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )
@@ -135,11 +176,12 @@ class HRED():
         # If we want to continue decoding with single_step we need the hidden states of all GRU layers
         if return_last_with_hidden_states:
             hidden_decoder = decoder  # there is no resetted decoder output
-            return output[-1, :, :], hidden_query[-1, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
+            # Note for attention mechanism
+            return output[-1, :, :], hidden_query[:, :, :], hidden_session[-1, :, :], hidden_decoder[-1, :, :]
         else:
             return output
 
-    def single_step(self, X, prev_hidden_query, prev_hidden_session, prev_hidden_decoder, reuse=True):
+    def single_step(self, X, prev_hidden_query_states, prev_hidden_session, prev_hidden_decoder, reuse=True):
         """
         Performs a step in the HRED X can be a 2-D tensor (batch, vocab), this can be used
         for beam search
@@ -154,7 +196,9 @@ class HRED():
         Shape: (output_dim)
         :return:
         """
-
+        # Note that with the implementation of attention the object "prev_hidden_query_states" contains not only the
+        # previous query encoded state but all previous states, therefore we need to get the last query state
+        prev_hidden_query = prev_hidden_query_states[-1, :, :]
         # Making embeddings for x
         embedder = layers.embedding_layer(X, vocab_dim=self.vocab_size, embedding_dim=self.embedding_dim, reuse=reuse)
 
@@ -196,13 +240,25 @@ class HRED():
         )
 
         decoder = hidden_decoder
+        flatten_decoder = tf.reshape(decoder, (-1, self.decoder_dim))
+
+        # add attention layer
+        # expand to num_of_steps x batch_size x num_of_steps x query_dim
+        num_of_atten_states = tf.shape(prev_hidden_query_states)[0]
+        # tf.Print(num_of_atten_states, [num_of_atten_states], "INFO - single-step ")
+        # tf.Print(flatten_decoder, [tf.shape(flatten_decoder)], "INFO - decoder.shape ")
+        query_encoder_expanded = tf.transpose(prev_hidden_query_states, [1, 0, 2])
+
+        flatten_decoder_with_attention = \
+            layers.attention_step(query_encoder_expanded, flatten_decoder, enc_dim=self.query_dim, dec_dim=self.decoder_dim,
+                                  reuse=reuse)
 
         # After the decoder we add an additional output layer
         output = layers.output_layer(
             embedder,
-            decoder,
+            flatten_decoder_with_attention,
             x_dim=self.embedding_dim,
-            h_dim=self.decoder_dim,
+            h_dim=self.decoder_dim + self.query_dim,
             y_dim=self.output_dim,
             reuse=reuse
         )
@@ -217,7 +273,7 @@ class HRED():
 
         softmax = self.softmax(logits)
 
-        return softmax, hidden_query, hidden_session, hidden_decoder
+        return softmax, tf.concat(0, [prev_hidden_query_states, tf.expand_dims(hidden_query, 0)]), hidden_session, hidden_decoder
 
     def softmax(self, logits):
         """

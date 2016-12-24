@@ -234,3 +234,115 @@ def _gru_layer_with_state_bias(h_prev, x, state, name='gru', x_dim=256, y_dim=10
         h = tf.sub(np.float32(1.0), z) * h_prev + z * h_tilde
 
     return h
+
+
+def attention_session(query_encoder_expanded, flatten_decoder, enc_dim=256, dec_dim=256, reuse=None):
+    """
+
+    :param query_encoder_expanded: 4D tensor
+                                   1) number of steps to attend over OR max steps
+                                   2) batch size
+                                   3) number of steps
+                                   4) query dim
+    :param flatten_decoder:
+    :param x_dim: dimensionality of query encoder
+    :param reuse:
+    :return:
+    """
+
+    num_of_steps = tf.shape(query_encoder_expanded)[0]
+    batch_size = tf.shape(query_encoder_expanded)[1]
+
+    with tf.variable_scope('attention', reuse=reuse):
+        # flatten for eventual multiplication (batch_size + num_of_steps + num_of_steps) x (query_dim)
+        flatten_query_encoder_expanded = tf.reshape(query_encoder_expanded, (-1, enc_dim))
+
+        # decoder_dim x query_dim
+        W = tf.get_variable(name='weight', shape=(dec_dim, enc_dim),
+                            initializer=tf.random_normal_initializer(stddev=0.01))
+
+        # (batch_size + num_of_steps) x (batch_size + num_of_steps + num_of_steps)
+        flatten_score = tf.matmul(flatten_decoder, tf.matmul(W, tf.transpose(flatten_query_encoder_expanded)))
+
+        # batch_size x num_of_steps x batch_size x num_of_steps x num_of_steps
+        score = tf.reshape(flatten_score, (num_of_steps, batch_size, num_of_steps, batch_size, num_of_steps))
+
+        # 0:batch_size x 1:num_of_steps x 2:num_of_steps_at
+        score = tf.transpose(
+            # 0:batch_size x 1:num_of_steps_at x 2:num_of_steps
+            tf.matrix_diag_part(
+                # 0:batch_size x 1:num_of_steps_at x 2:num_of_steps x 3:num_of_steps
+                tf.transpose(
+                    # 0:num_of_steps x 1:num_of_steps x 2:num_of_steps_at x 3:batch_size
+                    tf.matrix_diag_part(
+                        # 0:num_of_steps x 1:num_of_steps x 2:num_of_steps_at x 3:batch_size x 4:batch_size
+                        tf.transpose(score, [1, 3, 4, 0, 2])
+                    ), [3, 2, 0, 1]
+                )
+            ), [0, 2, 1]
+        )
+
+        # batch_size x num_of_steps x batch_size x num_of_steps x num_of_steps
+        a = tf.nn.softmax(score)
+        a_broadcasted = tf.tile(tf.expand_dims(a, 3), (1, 1, 1, enc_dim))
+
+        context = tf.reduce_sum(a_broadcasted * query_encoder_expanded, 2)
+        # context = tf.Print(context, [tf.shape(context)])
+
+        flatten_context = tf.reshape(context, (-1, enc_dim))
+
+    flatten_decoder_with_attention = tf.concat(1, [flatten_context, flatten_decoder])
+
+    return flatten_decoder_with_attention
+
+
+def attention_step(query_encoder_expanded, flatten_decoder, enc_dim=256, dec_dim=256, reuse=None):
+    """
+
+    :param query_encoder_expanded: 4D tensor
+                                   1) number of steps to attend over OR max steps
+                                   2) batch size
+                                   3) number of steps
+                                   4) query dim
+    :param flatten_decoder:
+    :param x_dim: dimensionality of query encoder
+    :param reuse:
+    :return:
+    """
+
+    num_of_steps = tf.shape(query_encoder_expanded)[1]
+    batch_size = tf.shape(query_encoder_expanded)[0]
+
+
+    with tf.variable_scope('attention', reuse=reuse):
+        # flatten for eventual multiplication (batch_size + num_of_steps) x (query_dim)
+        flatten_query_encoder_expanded = tf.reshape(query_encoder_expanded, (-1, enc_dim))
+
+        # decoder_dim x query_dim
+        W = tf.get_variable(name='weight', shape=(dec_dim, enc_dim),
+                            initializer=tf.random_normal_initializer(stddev=0.01))
+
+        # (batch_size) x (batch_size + num_of_steps)
+        flatten_score = tf.matmul(flatten_decoder, tf.matmul(W, tf.transpose(flatten_query_encoder_expanded)))
+
+        # (batch_size) x batch_size x num_of_steps
+        score = tf.reshape(flatten_score, (batch_size, batch_size, num_of_steps))
+
+        # (batch_size) x (num_of_steps)
+        score = tf.transpose(
+            tf.matrix_diag_part(
+                tf.transpose(score, [2, 0, 1])
+            ), [1, 0]
+        )
+
+        a = tf.nn.softmax(score)
+        a_broadcasted = tf.tile(tf.expand_dims(a, 2), (1, 1, enc_dim))
+
+        context = tf.reduce_sum(a_broadcasted * query_encoder_expanded, 1)
+        # context = tf.Print(context, [tf.shape(context)])
+
+        flatten_context = tf.reshape(context, (-1, enc_dim))
+
+    flatten_decoder_with_attention = tf.concat(1, [flatten_context, flatten_decoder])
+
+    return flatten_decoder_with_attention
