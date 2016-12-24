@@ -16,20 +16,23 @@ CANDIDATE_FILE = '../../data/2_exp-context-length/test_c1_hred_cand.ctx'
 OUTPUT_SCORE_FILE = '../../data/2_exp-context-length/test_c1_score'
 
 FILE_PREFIXES = [
-    # '../../data/2_exp-context-length/test_c1_hred',
-    # '../../data/2_exp-context-length/val_c1_hred',
-    # '../../data/2_exp-context-length/tr_c1_hred',
-    # '../../data/2_exp-context-length/test_c2_hred',
-    # '../../data/2_exp-context-length/val_c2_hred',
-    # '../../data/2_exp-context-length/tr_c2_hred',
-    # '../../data/2_exp-context-length/test_c3_hred',
-    # '../../data/2_exp-context-length/val_c3_hred',
-    # '../../data/2_exp-context-length/tr_c3_hred',
-    # '../../data/3_exp-noisy/test_noisy_hred',
-    # '../../data/3_exp-noisy/val_noisy_hred',
-    # '../../data/3_exp-noisy/tr_noisy_hred',
-    # '../../data/4_exp-long-tail/test_long_all_hred',
-    # '../../data/4_exp-long-tail/val_long_all_hred',
+    '../../data/1_exp-baseline/test_all_hred',
+    '../../data/1_exp-baseline/val_all_hred',
+    '../../data/1_exp-baseline/tr_all_hred',
+    '../../data/2_exp-context-length/test_c1_hred',
+    '../../data/2_exp-context-length/val_c1_hred',
+    '../../data/2_exp-context-length/tr_c1_hred',
+    '../../data/2_exp-context-length/test_c2_hred',
+    '../../data/2_exp-context-length/val_c2_hred',
+    '../../data/2_exp-context-length/tr_c2_hred',
+    '../../data/2_exp-context-length/test_c3_hred',
+    '../../data/2_exp-context-length/val_c3_hred',
+    '../../data/2_exp-context-length/tr_c3_hred',
+    '../../data/3_exp-noisy/test_noisy_hred',
+    '../../data/3_exp-noisy/val_noisy_hred',
+    '../../data/3_exp-noisy/tr_noisy_hred',
+    '../../data/4_exp-long-tail/test_long_all_hred',
+    '../../data/4_exp-long-tail/val_long_all_hred',
     '../../data/4_exp-long-tail/tr_long_all_hred',
 ]
 
@@ -39,12 +42,12 @@ LOGS_DIR = '../../logs'
 UNK_SYMBOL = 0
 EOQ_SYMBOL = 1
 EOS_SYMBOL = 2
-RESTORE = True
+RESTORE = False
 
 N_BUCKETS = 20
 MAX_ITTER = 10000000
 
-CHECKPOINT_FILE = '../../checkpoints/model-huge3.ckpt'
+CHECKPOINT_FILE = '../../checkpoints/model-huge-attention.ckpt'
 # OUR_VOCAB_FILE = '../../data/aol_vocab_50000.pkl'
 # OUR_TRAIN_FILE = '../../data/aol_sess_50000.out'
 # OUR_SAMPLE_FILE = '../../data/sample_aol_sess_50000.out'
@@ -55,27 +58,13 @@ VOCAB_SIZE = 50003
 # EMBEDDING_DIM = 25
 # QUERY_DIM = 50
 # SESSION_DIM = 100
-EMBEDDING_DIM = 128
-QUERY_DIM = 256
-SESSION_DIM = 512
-BATCH_SIZE = 50
+EMBEDDING_DIM = 64
+QUERY_DIM = 128
+SESSION_DIM = 256
+BATCH_SIZE = 80
 MAX_LENGTH = 50
 
-# CHECKPOINT_FILE = '../../checkpoints/model-small.ckpt'
-# OUR_VOCAB_FILE = '../../data/aol_vocab_2500.pkl'
-# OUR_TRAIN_FILE = '../../data/small_train.out'
-# OUR_SAMPLE_FILE = '../../data/sample_small_train.out'
-# SORDONI_VOCAB_FILE = '../../data/sordoni/dev_large/train.dict.pkl'
-# SORDONI_TRAIN_FILE = '../../data/sordoni/dev_large/train.ses.pkl'
-# SORDONI_VALID_FILE = '../../data/sordoni/dev_large/valid.ses.pkl'
-# VOCAB_SIZE = 2504
-# EMBEDDING_DIM = 10
-# QUERY_DIM = 15
-# SESSION_DIM = 20
-# BATCH_SIZE = 80
-# MAX_LENGTH = 50
 SEED = 1234
-
 
 # For beam search example:
 # https://github.com/tensorflow/tensorflow/issues/654#issuecomment-168237741
@@ -141,7 +130,7 @@ class Scorer(object):
         # print("Start scoring.")
 
         input_for_mask = np.expand_dims(np.array(context), axis=1)
-        # attention_mask = make_attention_mask(input_for_mask)
+        attention_mask = make_attention_mask(input_for_mask)
 
         # print(input_for_mask)
         # print(attention_mask)
@@ -150,7 +139,7 @@ class Scorer(object):
             self.session_inference,
             feed_dict={
                 self.X: input_for_mask,
-                # self.attention_mask: attention_mask
+                self.attention_mask: attention_mask
             }
         )
 
@@ -174,14 +163,14 @@ class Scorer(object):
                 probs += [-np.log2(softmax_out[token])]
                 input_uptil_now += [token]
 
-                # input_for_mask = np.expand_dims(np.array(input_uptil_now), axis=0)
-                # attention_mask = make_attention_mask(input_for_mask)
+                input_for_mask = np.expand_dims(np.array(input_uptil_now), axis=1)
+                attention_mask = make_attention_mask(input_for_mask)
 
                 softmax_out, hidden_query, hidden_session, hidden_decoder = sess.run(
                     self.step_inference,
                     {self.X_sample: [token], self.H_query: hidden_query, self.H_session: hidden_session,
                      self.H_decoder: hidden_decoder,
-                     # self.attention_mask: attention_mask
+                     self.attention_mask: attention_mask
                      }
                 )
 
@@ -207,7 +196,7 @@ if __name__ == '__main__':
 
                 context_file = prefix + '_sess.ctx'
                 candidate_file = prefix + '_cand.ctx'
-                output_source_file = prefix + '_score'
+                output_source_file = prefix + '_score_attention'
 
                 all_contexts = [[scorer.vocab_dict.get(z, EOQ_SYMBOL) for z in y.split()] for y in open(context_file).readlines()]
 
