@@ -3,6 +3,7 @@
 An extension on the Hierarchical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion, our implementation is in Tensorflow and uses an attention mechanism.
 
 **The original paper:** [A Hierarchical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion](https://arxiv.org/abs/1507.02221)
+**Our final report: ** [HRED with Attention](https://github.com/tscheepers/hred-attention-tensorflow/blob/master/docs/report_hred_with_attention.pdf)
 
 **The original Theano implementation:** [sordonia/hred-qs](https://github.com/sordonia/hred-qs)
 
