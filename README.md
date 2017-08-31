@@ -1,8 +1,8 @@
-# Hierachical Recurrent Encoder-Decoder 
+# Hierarchical Recurrent Encoder-Decoder 
 
-An extension on the Hierachical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion, our implementation is in Tensorflow and uses an attention mechanism.
+An extension on the Hierarchical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion, our implementation is in Tensorflow and uses an attention mechanism.
 
-**The original paper:** [A Hierachical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion](https://arxiv.org/abs/1507.02221)
+**The original paper:** [A Hierarchical Recurrent Encoder-Decoder for Generative Context-Aware Query Suggestion](https://arxiv.org/abs/1507.02221)
 
 **The original Theano implementation:** [sordonia/hred-qs](https://github.com/sordonia/hred-qs)
 
